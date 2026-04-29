@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+}
+
+/* Better tap target sizing on mobile */
+button,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+/* Avoid iOS Safari zoom on input focus */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
