@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth, signOut } from "@/auth";
 import { PassphraseSection } from "./PassphraseSection";
 import { ConnectorWizard } from "./ConnectorWizard";
+import { DataExport } from "./DataExport";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -75,9 +76,9 @@ export default async function SettingsPage() {
 
       <Section
         title="Data"
-        description="Your data lives in your Google Drive at /AtomicTracker. Export ships in commit 5."
+        description="Your data lives in your Google Drive at /AtomicTracker. Download a zip mirror anytime."
       >
-        <p className="text-sm text-slate-500">No exports yet.</p>
+        <DataExport />
       </Section>
     </main>
   );

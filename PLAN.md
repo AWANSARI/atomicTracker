@@ -7,7 +7,7 @@
 **AI:** BYOK chooser — Anthropic Claude / OpenAI / Google Gemini
 **Multi-user:** Yes, from day one
 **Project-owned state:** None. Everything lives in the user's Drive or in their own Claude/Telegram account.
-**Plan status:** v3 — all earlier questions answered. One small confirm in §11. Otherwise ready to start Phase 1 on your word.
+**Plan status:** v3 + Phase 1 shipped (commits 1–10 on `main`). Live at https://atomictracker.vercel.app. Phase 2 next.
 
 ---
 
@@ -379,15 +379,33 @@ Post-processing: hit YouTube Data API for each `youtube_query`, take top result,
 
 ---
 
-## 12. First five commits (once you accept v2)
+## 12. Commit log (Phase 1)
 
-1. `chore: scaffold next.js + tailwind + typescript + pwa, deploy to vercel, repo AWANSARI/atomicTracker`
-2. `feat: nextauth google login with drive.file + calendar.events scopes (jwt session, no kv)`
-3. `feat: drive folder bootstrap + settings page + encryption passphrase`
-4. `feat: connector wizard for claude/openai/gemini/telegram with key-acquisition guidance`
-5. `feat: tracker picker + meal-planner config wizard (diet, health, allergies, cuisines, ingredients, frequency)`
+All shipped on `main`:
 
-After these five we have a deployed-and-signed-in shell with config; subsequent commits add generation, review, acceptance, calendar reminders, prep check-in, and chat.
+1. `chore: scaffold next.js + tailwind + typescript + pwa` *(f396544)*
+2. `feat: nextauth google login with drive.file + calendar.events scopes` *(3d8a285)*
+3. `feat: drive folder bootstrap + settings page + encryption passphrase` *(c987e99)*
+4. `feat: connector wizard for claude/openai/gemini with key-acquisition guidance` *(8a72067)*
+5. `feat: tracker picker + meal-planner 8-step config wizard` *(b5ad584)*
+6. `feat: ai meal-plan generation against saved provider key` *(968afd8)*
+7. `feat: per-meal lock + swap, regenerate-with-locks` *(41a7eb6)*
+8. `feat: chat panel + acceptance flow (grocery csv + recurring calendar reminders)` *(a1f1b2d)*
+9. `feat: sunday prep check-in flow with calendar scheduling` *(abc1abe)*
+10. `feat: data export (zip mirror of drive folder)` *(this commit)*
+
+Phase 1 covers: sign-in, encrypted connector store, AI plan generation, per-meal lock + swap, regenerate-with-locks, chat panel, acceptance flow with grocery CSV + Calendar reminders, Sunday prep check-in with breakfast/lunch scheduling, and data export.
+
+## 13. Phase 2 backlog (not yet started)
+
+- **OpenClaw setup wizard** — recurring tasks via the user's local OpenClaw gateway; multi-platform messaging bridge (WhatsApp/Telegram/Discord/Slack/Signal).
+- **Claude Code Routine setup wizard** — alternative trigger source for paid Claude users.
+- **Telegram bot direct integration** — pair via Settings, mirror chat UI, accept/swap from chat.
+- **Favorite ingredients / favorite meals** as first-class entities; "Hold this meal, regenerate the rest."
+- **Real ordering deep links** — Walmart/Amazon affiliate APIs, DoorDash DashMart cart prefill (Phase 3 in PLAN.md but achievable any time).
+- **Yearly XLSX archive** — built when first week of new year is accepted.
+- **Granular ingredient editing** — per-ingredient swap/add/remove on plan review.
+- **Refactor Tracker as plug-in interface** — second tracker (workout planner) to validate the abstraction.
 
 ---
 

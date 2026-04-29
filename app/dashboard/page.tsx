@@ -206,18 +206,19 @@ export default async function DashboardPage() {
       </section>
 
       <section className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
-        <p className="font-medium text-slate-900">What&apos;s next</p>
+        <p className="font-medium text-slate-900">Phase 1 is live</p>
         <p className="mt-2">
-          Phase 1 progress —{" "}
+          Sign-in, encrypted connector store, AI plan generation (Claude /
+          OpenAI / Gemini), per-meal lock + swap, regenerate-with-locks, chat
+          panel, accept flow with grocery CSV and Calendar reminders, Sunday
+          prep check-in, and data export are all shipped. See{" "}
           <a
             href="https://github.com/AWANSARI/atomicTracker/blob/main/PLAN.md"
             className="font-medium text-brand-700 underline-offset-2 hover:underline"
           >
             PLAN.md
-          </a>
-          . Once your tracker is configured, the next commits add plan
-          generation against your AI provider, the review/swap UI, the grocery
-          CSV + Calendar reminders, and the Sunday prep check-in.
+          </a>{" "}
+          for the Phase 2 roadmap (OpenClaw, Telegram, ordering deep-links).
         </p>
       </section>
     </main>

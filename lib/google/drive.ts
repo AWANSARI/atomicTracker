@@ -258,6 +258,42 @@ export async function upsertText(
   return uploadFile(accessToken, parentId, name, content, mimeType);
 }
 
+export type DriveChild = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size?: string;
+};
+
+/** List all immediate children (files + subfolders) of a folder. */
+export async function listFolderChildren(
+  accessToken: string,
+  folderId: string,
+): Promise<DriveChild[]> {
+  const q = [`'${folderId}' in parents`, "trashed = false"].join(" and ");
+  const data = await driveJson<{ files: DriveChild[] }>(
+    accessToken,
+    `/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,size)&pageSize=1000&spaces=drive`,
+  );
+  return data.files;
+}
+
+/** Stream raw bytes of a file. Returns ArrayBuffer; safe for binary content. */
+export async function readFileBytes(
+  accessToken: string,
+  fileId: string,
+): Promise<ArrayBuffer> {
+  const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new DriveError(res.statusText, res.status, body);
+  }
+  return res.arrayBuffer();
+}
+
 /** Delete (trash) a file. Drive's drive.file scope allows trashing files we created. */
 export async function deleteFile(
   accessToken: string,
