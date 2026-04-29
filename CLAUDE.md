@@ -48,8 +48,15 @@ app/
     chat/route.ts                  POST: free-form AI Q&A about plan
     setup-reminders/route.ts       POST: ONE-TIME create Friday/Sunday/Shopping recurring reminders
                                    stored on tracker.meal-planner.json (not on each plan)
+    save-plan/route.ts             POST: persist edited plan to Drive without calendar side-effects;
+                                   body: { weekId, plan } → writes {weekId}.json or .draft.json
+    archive/route.ts               POST: generate yearly XLSX archive from all accepted plans
+                                   for a given year; body: { year: number }; writes to
+                                   /AtomicTracker/archive/{year}.xlsx; overwrites if exists
     export/route.ts                GET: zip mirror of /AtomicTracker Drive folder
-    photos/route.ts                Added externally (commit 1a38321 — verify intent before editing)
+    photos/route.ts                POST: upload a meal photo (FormData: weekId,day,slot,file ≤8MB)
+                                   → Drive /history/photos/{weekId}/{day}-{slot}-{ts}.{ext};
+                                   returns { ok, fileId, viewUrl, name }
   dashboard/
     layout.tsx, page.tsx, actions.ts
   settings/
@@ -63,7 +70,7 @@ app/
   trackers/
     layout.tsx, page.tsx           Tracker picker
     meal-planner/
-      page.tsx                     Tracker home: WeekCard x2, config readout, prep + reminders
+      page.tsx                     Tracker home: config (collapsed) → WeekCard x2 → recurring reminders
       actions.ts                   Read/save tracker.meal-planner.json
       GenerateClient.tsx           Client: generate flow w/ overwrite confirm
       RemindersClient.tsx          Client: setup-reminders trigger
@@ -97,11 +104,15 @@ lib/
     meal-planner-prompt.ts         AI prompt builders: full-week / swap-one / regenerate-with-locks / chat-system
     meal-planner-validate.ts       Tolerant parser: parseMeals (1-7), parseSingleMeal, parseMealEnvelope
     grocery.ts                     Build aggregated grocery rows + RFC-4180 CSV
+    xlsx-archive.ts                server-only — buildYearlyArchiveXlsx(plans): Uint8Array;
+                                   Open XML workbook via JSZip (already in package.json);
+                                   12 cols: Week,Day,Name,Cuisine,Cal,P/C/F/Fib,Ingredients,Store,Reheat
   youtube/
-    lookup.ts                      server-only — fetchRecipeVideos (N results), fetchTopRecipeVideo,
-                                   testYouTubeKey. NOTE: returning N results is wired in but
-                                   consumers (api/generate, api/swap, api/regenerate) still call
-                                   the single-result helper. Wiring up alternates in UI is a TODO.
+    lookup.ts                      server-only — fetchRecipeVideos(key, q, count=5) returns N results
+                                   in one API call; fetchTopRecipeVideo is a backwards-compat wrapper.
+                                   API routes (generate/swap/regenerate) store videos[0] as
+                                   recipe_video and videos[1..4] as recipe_alternatives; PlanClient
+                                   renders top video + collapsible "Other recipe videos" list.
 
 types/
   next-auth.d.ts                   Module augmentation: Session.accessToken, Session.googleSub, JWT fields
@@ -129,7 +140,10 @@ LICENSE                            MIT
       {weekId}.json                      Accepted plan (with calendarEventIds, eventIdByDay, modifiedByDay)
       {weekId}-prep.json                 Prep check-in state (with calendarEventIds)
     chats/{ISO-datetime}.json            Optional chat transcripts
-    photos/                              Meal photos (added by /api/photos — verify shape before editing)
+    photos/
+      {weekId}/
+        {day}-{slot}-{timestamp}.{ext}   Meal photos uploaded via PrepClient; viewUrl attached
+                                         to Calendar event description and stored in prep.json
   grocery/
     {weekId}-list.csv                    RFC-4180 CSV — aggregated, sorted by category
     {weekId}-list.json                   JSON mirror with rows
@@ -182,8 +196,11 @@ modifiedByDay: { [Day]: ISO }    ← set by /api/swap when plan was already acce
 day, name, cuisine, calories, macros, health_notes, instructions
 ingredients: { name, qty, unit, category? }   category: produce|protein|dairy|grain|pantry|spice|frozen|other
 youtube_query: string
-recipe_url?: string                    YouTube search URL fallback (always set)
-recipe_video?: { id, title, channel, url }   specific top-result video (when YouTube key configured)
+recipe_url?: string                       YouTube search URL fallback (always set)
+recipe_video?: { id, title, channel, url }   top-result video (when YouTube key configured)
+recipe_alternatives?: RecipeVideo[]       up to 4 further videos (stored alongside recipe_video)
+storage?: string                          AI-generated: how to refrigerate/freeze after cooking
+reheat?: string                           AI-generated: how to reheat and serve
 locked?: boolean
 ```
 
@@ -264,29 +281,21 @@ If you add a new Calendar event, **store its ID somewhere persistent** so re-acc
 | d3546d4 | multi-week home + overwrite confirm + thorough dark-mode audit |
 | 546064c | youtube two links + grouped grocery + per-day re-accept + week-card fix |
 | 6f188e8 | aggregate grocery, one-time recurring reminders, B/L on accept, schedule step |
-| 1a38321 | (external) feat: 9 UX fixes — recipe alts, grocery groups, weekly prep, storage/reheat |
-| c5d4521 | (external) updated code |
+| 1a38321 | feat: 9 UX fixes — recipe alts, grocery groups, weekly prep, storage/reheat |
+| c5d4521 | updated code |
 
 ## Pending / TODO
 
 These are unfinished pieces. Low → high priority within each section:
 
-### Wired but not exposed in UI
-- **YouTube alternates.** `lib/youtube/lookup.ts` has `fetchRecipeVideos` that returns N results in a single API call (same cost as 1). Consumers (`api/generate`, `api/swap`, `api/regenerate`) still call `fetchTopRecipeVideo`. Plan view shows only one specific link + a search fallback. **Wire the alternates** by:
-  1. Bumping the meal schema: `recipe_videos: RecipeVideo[]` (replace `recipe_video?` or keep both).
-  2. Updating the validate.ts to accept the array.
-  3. Updating the API routes to call `fetchRecipeVideos` and store the array.
-  4. Updating PlanClient MealCard to show top video + a small "More options" disclosure with 2-4 alternates.
-
 ### Bugs / rough edges
-- **Stale recurring reminders from older accepts.** Existing users have admin events on Calendar from before commit `6f188e8` moved them out. The new `/api/setup-reminders` won't see those (their IDs aren't in the new `reminderEventIds`). Users have to manually delete the dupes once. Worth documenting in the README or a one-time cleanup banner.
-- **`/api/photos`** was added externally (commit `1a38321`). Verify intent and schema before touching it.
+- **Stale recurring reminders from older accepts.** Existing users have admin events on Calendar from before commit `6f188e8` moved them out. The new `/api/setup-reminders` won't see those (their IDs aren't in the new `reminderEventIds`). Users have to manually delete the dupes once. A one-time info notice is shown on the meal planner home when `reminderEventIds` is not yet configured.
 
 ### Bigger features
 - **Telegram bot** — paste BotFather token in Settings, mirror chat in Telegram, accept/swap from chat commands. Plan in PLAN.md §6 Phase 2.
 - **OpenClaw setup wizard** — recurring tasks via user's local OpenClaw gateway; multi-platform messaging bridge. Plan in PLAN.md §8.4.
 - **Real ordering deep-links** — Walmart Open API + Amazon PA-API for product disambiguation (vs current search URLs). Phase 3.
-- **Yearly XLSX archive** — auto-build when first week of new year is accepted. PLAN.md §13.
+- **Yearly XLSX archive** — `POST /api/archive { year }` is implemented. Auto-trigger on first accept of a new year is not yet wired (call the route manually from Settings or Dashboard).
 - **Tracker abstraction** — refactor `Tracker` as a plug-in interface; add a second tracker (e.g. workout planner) to validate. PLAN.md §13.
 - **Granular ingredient editing** — per-ingredient swap/add/remove on plan review.
 

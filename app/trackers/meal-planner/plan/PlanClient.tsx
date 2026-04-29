@@ -3,12 +3,16 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
+  Check,
   ClipboardCheck,
   Flame,
+  Loader2,
   Lock,
   LockOpen,
   MessageCircle,
+  Pencil,
   PlayCircle,
+  Plus,
   RefreshCw,
   Send,
   Snowflake,
@@ -18,7 +22,7 @@ import { decryptJson } from "@/lib/crypto/webcrypto";
 import { loadPassphrase } from "@/lib/storage/passphrase";
 import type { ProviderId } from "@/lib/ai/providers";
 import { readConnectorEnvelope } from "@/app/settings/actions";
-import type { Day, Meal, MealPlan } from "@/lib/tracker/meal-planner-plan";
+import type { Day, Ingredient, Meal, MealPlan } from "@/lib/tracker/meal-planner-plan";
 import { buildGroceryRows, groupGroceryRows } from "@/lib/tracker/grocery";
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
@@ -65,6 +69,10 @@ export function PlanClient({
   const [busyDay, setBusyDay] = useState<Day | "all" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Ingredient editing state
+  const [dirtyDays, setDirtyDays] = useState<Set<Day>>(new Set());
+  const [savingState, setSavingState] = useState<Partial<Record<Day, "saving" | "saved" | null>>>({});
+
   // Accept state
   const [accepting, setAccepting] = useState(false);
   const [syncingDay, setSyncingDay] = useState<Day | null>(null);
@@ -90,8 +98,51 @@ export function PlanClient({
         m.day === day ? { ...m, locked: !m.locked } : m,
       ),
     }));
-    // Note: we save to Drive only on swap/regenerate.
-    // Lock state lives in memory until a network change triggers a write.
+  }
+
+  function onIngredientChange(day: Day, newIngredients: Ingredient[]) {
+    setPlan((p) => ({
+      ...p,
+      meals: p.meals.map((m) =>
+        m.day === day ? { ...m, ingredients: newIngredients } : m,
+      ),
+    }));
+    setDirtyDays((prev) => {
+      const next = new Set(prev);
+      next.add(day);
+      return next;
+    });
+    // Clear any stale "saved" status when the user edits again
+    setSavingState((prev) => ({ ...prev, [day]: null }));
+  }
+
+  async function savePlan(day: Day) {
+    const daysToSave = new Set(dirtyDays);
+    daysToSave.add(day); // ensure the clicked day is included even if somehow not in set
+    const savingObj: Partial<Record<Day, "saving" | "saved" | null>> = {};
+    for (const d of daysToSave) savingObj[d] = "saving";
+    setSavingState(savingObj);
+    try {
+      const res = await fetch("/api/save-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weekId: plan.weekId, plan }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error((j as { error?: string }).error ?? `${res.status}`);
+      }
+      setDirtyDays(new Set());
+      const savedObj: Partial<Record<Day, "saving" | "saved" | null>> = {};
+      for (const d of daysToSave) savedObj[d] = "saved";
+      setSavingState(savedObj);
+      setTimeout(() => {
+        setSavingState({});
+      }, 3000);
+    } catch (e) {
+      setSavingState({});
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   async function swapDay(day: Day) {
@@ -309,6 +360,12 @@ export function PlanClient({
               onLock={() => toggleLock(m.day)}
               onSwap={() => swapDay(m.day)}
               onSync={() => syncDay(m.day)}
+              dirty={dirtyDays.has(m.day)}
+              saving={savingState[m.day] ?? null}
+              onIngredientChange={(newIngredients) =>
+                onIngredientChange(m.day, newIngredients)
+              }
+              onSave={() => savePlan(m.day)}
             />
           );
         })}
@@ -625,6 +682,10 @@ function MealCard({
   onLock,
   onSwap,
   onSync,
+  dirty,
+  saving,
+  onIngredientChange,
+  onSave,
 }: {
   meal: Meal;
   busy: boolean;
@@ -633,6 +694,10 @@ function MealCard({
   onLock: () => void;
   onSwap: () => void;
   onSync: () => void;
+  dirty: boolean;
+  saving: "saving" | "saved" | null;
+  onIngredientChange: (newIngredients: Ingredient[]) => void;
+  onSave: () => void;
 }) {
   return (
     <article
@@ -681,18 +746,13 @@ function MealCard({
 
       <p className="mt-3 text-xs text-slate-600 dark:text-slate-400">{meal.health_notes}</p>
 
-      <details className="mt-3 text-xs">
-        <summary className="cursor-pointer text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200">
-          Ingredients ({meal.ingredients.length})
-        </summary>
-        <ul className="mt-2 space-y-0.5 text-slate-700 dark:text-slate-300">
-          {meal.ingredients.map((ing, j) => (
-            <li key={j}>
-              {ing.qty} {ing.unit} {ing.name}
-            </li>
-          ))}
-        </ul>
-      </details>
+      <IngredientsEditor
+        ingredients={meal.ingredients}
+        dirty={dirty}
+        saving={saving}
+        onChange={onIngredientChange}
+        onSave={onSave}
+      />
 
       <details className="mt-2 text-xs">
         <summary className="cursor-pointer text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200">
@@ -794,6 +854,229 @@ function MealCard({
         </div>
       </div>
     </article>
+  );
+}
+
+// ─── Ingredients editor ──────────────────────────────────────────────────────
+
+const INPUT_CLS =
+  "h-7 rounded border border-slate-300 bg-white px-1.5 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-brand-500";
+
+function IngredientsEditor({
+  ingredients,
+  dirty,
+  saving,
+  onChange,
+  onSave,
+}: {
+  ingredients: Ingredient[];
+  dirty: boolean;
+  saving: "saving" | "saved" | null;
+  onChange: (newIngredients: Ingredient[]) => void;
+  onSave: () => void;
+}) {
+  // editingIdx: which row is currently in edit mode (-1 = none)
+  const [editingIdx, setEditingIdx] = useState<number>(-1);
+  // draft for the row being edited
+  const [editDraft, setEditDraft] = useState<Ingredient>({ qty: "", unit: "", name: "" });
+  // add-row draft
+  const [addDraft, setAddDraft] = useState<Ingredient>({ qty: "", unit: "", name: "" });
+
+  function startEdit(idx: number) {
+    const ing = ingredients[idx];
+    if (!ing) return;
+    setEditingIdx(idx);
+    setEditDraft({ ...ing });
+  }
+
+  function commitEdit(idx: number) {
+    if (editDraft.name.trim() !== "") {
+      const next = ingredients.map((ing, i) =>
+        i === idx ? { ...ing, ...editDraft } : ing,
+      );
+      onChange(next);
+    }
+    // If name is empty, discard the edit and restore original row
+    setEditingIdx(-1);
+  }
+
+  function removeIngredient(idx: number) {
+    onChange(ingredients.filter((_, i) => i !== idx));
+    if (editingIdx === idx) setEditingIdx(-1);
+  }
+
+  function addIngredient() {
+    if (!addDraft.name.trim()) return;
+    onChange([...ingredients, { ...addDraft }]);
+    setAddDraft({ qty: "", unit: "", name: "" });
+  }
+
+  return (
+    <details className="mt-3 text-xs">
+      <summary className="cursor-pointer text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200">
+        Ingredients ({ingredients.length})
+      </summary>
+
+      <ul className="mt-2 space-y-1">
+        {ingredients.map((ing, idx) =>
+          editingIdx === idx ? (
+            // ── Edit mode row ──
+            <li key={idx} className="flex items-center gap-1">
+              <input
+                aria-label="Quantity"
+                className={`w-14 ${INPUT_CLS}`}
+                value={editDraft.qty}
+                autoFocus
+                onChange={(e) => setEditDraft((d) => ({ ...d, qty: e.target.value }))}
+                onBlur={() => commitEdit(idx)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitEdit(idx);
+                  if (e.key === "Escape") setEditingIdx(-1);
+                }}
+              />
+              <input
+                aria-label="Unit"
+                className={`w-16 ${INPUT_CLS}`}
+                value={editDraft.unit}
+                onChange={(e) => setEditDraft((d) => ({ ...d, unit: e.target.value }))}
+                onBlur={() => commitEdit(idx)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitEdit(idx);
+                  if (e.key === "Escape") setEditingIdx(-1);
+                }}
+              />
+              <input
+                aria-label="Ingredient name"
+                className={`min-w-0 flex-1 ${INPUT_CLS}`}
+                value={editDraft.name}
+                onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
+                onBlur={() => commitEdit(idx)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitEdit(idx);
+                  if (e.key === "Escape") setEditingIdx(-1);
+                }}
+              />
+              <button
+                type="button"
+                aria-label="Confirm edit"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => commitEdit(idx)}
+                className="grid h-7 w-7 shrink-0 place-items-center rounded border border-slate-300 bg-white text-emerald-600 hover:bg-emerald-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                aria-label="Remove ingredient"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => removeIngredient(idx)}
+                className="grid h-7 w-7 shrink-0 place-items-center rounded border border-slate-300 bg-white text-red-500 hover:bg-red-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ) : (
+            // ── Read-only row ──
+            <li
+              key={idx}
+              role="button"
+              tabIndex={0}
+              className="group flex cursor-pointer items-center gap-1 rounded-md border border-transparent px-1 py-0.5 text-slate-700 hover:border-slate-200 hover:bg-slate-50 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-800/50"
+              onClick={() => startEdit(idx)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); startEdit(idx); } }}
+              title="Click to edit"
+            >
+              <span className="min-w-0 flex-1">
+                {ing.qty} {ing.unit} {ing.name}
+              </span>
+              <Pencil className="h-3 w-3 shrink-0 opacity-0 text-slate-400 transition-opacity group-hover:opacity-100" />
+              <button
+                type="button"
+                aria-label={`Remove ${ing.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeIngredient(idx);
+                }}
+                className="grid h-5 w-5 shrink-0 place-items-center rounded text-slate-400 opacity-0 hover:text-red-500 group-hover:opacity-100 dark:text-slate-500 dark:hover:text-red-400"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </li>
+          ),
+        )}
+      </ul>
+
+      {/* Add ingredient row */}
+      <div className="mt-2 flex items-center gap-1">
+        <input
+          aria-label="New ingredient quantity"
+          placeholder="qty"
+          className={`w-14 ${INPUT_CLS}`}
+          value={addDraft.qty}
+          onChange={(e) => setAddDraft((d) => ({ ...d, qty: e.target.value }))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") addIngredient();
+          }}
+        />
+        <input
+          aria-label="New ingredient unit"
+          placeholder="unit"
+          className={`w-16 ${INPUT_CLS}`}
+          value={addDraft.unit}
+          onChange={(e) => setAddDraft((d) => ({ ...d, unit: e.target.value }))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") addIngredient();
+          }}
+        />
+        <input
+          aria-label="New ingredient name"
+          placeholder="ingredient name…"
+          className={`min-w-0 flex-1 ${INPUT_CLS}`}
+          value={addDraft.name}
+          onChange={(e) => setAddDraft((d) => ({ ...d, name: e.target.value }))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") addIngredient();
+          }}
+        />
+        <button
+          type="button"
+          aria-label="Add ingredient"
+          onClick={addIngredient}
+          disabled={!addDraft.name.trim()}
+          className="grid h-7 w-7 shrink-0 place-items-center rounded border border-slate-300 bg-white text-brand-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* Save changes button — only when dirty */}
+      {dirty || saving !== null ? (
+        <div className="mt-2 flex items-center gap-2">
+          {saving === "saved" ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+              <Check className="h-3 w-3" />
+              Saved
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving === "saving"}
+              className="inline-flex items-center gap-1.5 rounded-md border border-brand-300 bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-700 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-brand-700 dark:bg-brand-900/30 dark:text-brand-300 dark:hover:bg-brand-900/50"
+            >
+              {saving === "saving" ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Saving&hellip;
+                </>
+              ) : (
+                "Save changes"
+              )}
+            </button>
+          )}
+        </div>
+      ) : null}
+    </details>
   );
 }
 

@@ -179,6 +179,11 @@ export default async function MealPlannerHomePage() {
         <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Recurring reminders
         </h2>
+        {!config.reminderEventIds?.fridayPlan && (
+          <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-300">
+            If you accepted meal plans before this update, your Google Calendar may have duplicate &ldquo;AtomicTracker&rdquo; admin events. Set up recurring reminders below once, then delete any older duplicates from your calendar.
+          </p>
+        )}
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
           {config.reminderEventIds?.fridayPlan
             ? "Friday plan + Sunday prep + weekly shopping reminders are set up. Refresh to apply changes after editing your config."
