@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { auth } from "@/auth";
 import { ensureAtomicTrackerLayout, findFile, readJson } from "@/lib/google/drive";
 import {
@@ -7,6 +6,7 @@ import {
   type MealPlan,
 } from "@/lib/tracker/meal-planner-plan";
 import { PlanClient } from "./PlanClient";
+import { AppShell } from "@/components/AppShell";
 
 const APP_VERSION = "0.1.0";
 
@@ -42,29 +42,17 @@ export default async function PlanPage({
   }
 
   return (
-    <main className="mx-auto min-h-dvh max-w-md px-6 py-10">
-      <header className="flex items-center gap-3">
-        <Link
-          href="/trackers/meal-planner"
-          aria-label="Back"
-          className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-        >
-          ←
-        </Link>
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight">{weekId}</h1>
-          <p className="text-xs text-slate-500">
-            {plan
-              ? `${plan.weekStart} → ${plan.weekEnd} · ${
-                  plan.status === "draft" ? "Draft" : "Accepted"
-                }`
-              : "No plan yet"}
-          </p>
-        </div>
-      </header>
-
+    <AppShell
+      title={weekId}
+      subtitle={
+        plan
+          ? `${plan.weekStart} → ${plan.weekEnd} · ${plan.status === "draft" ? "Draft" : "Accepted"}`
+          : "No plan yet"
+      }
+      backHref="/trackers/meal-planner"
+    >
       {!plan ? (
-        <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
           <p>
             No plan generated for this week yet. Go back and tap{" "}
             <em>Generate next week</em>.
@@ -73,6 +61,6 @@ export default async function PlanPage({
       ) : (
         <PlanClient initialPlan={plan} googleSub={googleSub} />
       )}
-    </main>
+    </AppShell>
   );
 }

@@ -3,6 +3,7 @@ import "server-only";
 import {
   ALL_DIETS,
   COMMON_ALLERGIES,
+  COOKING_FREQUENCIES,
   CUISINES,
   HEALTH_OPTIONS,
 } from "./meal-planner-defaults";
@@ -53,15 +54,31 @@ export function buildMealPlannerPrompt(args: {
         .join("\n")
     : "  (no prior history)";
 
-  return `You are a thoughtful meal-planning assistant. Generate exactly 7 dinner meals for the week of ${weekStart} through ${weekEnd}, one per day Monday through Sunday.
+  // Days to plan for — exclude cheat day if set
+  const allDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const daysToPlan = config.cheatDay
+    ? allDays.filter((d) => d !== config.cheatDay)
+    : allDays;
+  const mealCount = daysToPlan.length;
+  const dayList = daysToPlan.join(", ");
 
-USER PROFILE
+  // Cooking frequency note for the AI
+  const freqInfo = COOKING_FREQUENCIES.find((f) => f.id === config.cookingFrequency);
+  const cookingNote =
+    config.cookingFrequency === "custom" && config.customCookingFrequency
+      ? config.customCookingFrequency
+      : freqInfo?.hint ?? "";
+
+  return `You are a thoughtful meal-planning assistant. Generate exactly ${mealCount} dinner meals for the week of ${weekStart} through ${weekEnd}, one per day on these days only: ${dayList}.
+
+${config.cheatDay ? `IMPORTANT: ${config.cheatDay} is the user's cheat day — do NOT generate a meal for ${config.cheatDay}. The output array should NOT include any entry with day = "${config.cheatDay}".\n` : ""}USER PROFILE
   Diet preferences: ${dietLabels.join(", ") || "(none)"}
   Health conditions: ${healthLabels.join(", ") || "(none)"} — adjust sodium, glycemic load, fiber, iodine, etc. as appropriate
   Allergies (avoid completely): ${allergyLabels.join(", ") || "(none)"}
   Preferred cuisines: ${cuisineLabels.join(", ") || "(any)"}
   Pantry — primary ingredients to use: ${ingredients.length ? ingredients.join(", ") : "(no specific pantry — use common ingredients)"}
   Max repeats per dish in this week: ${config.repeatsPerWeek}
+  Cooking pattern: ${cookingNote || "Not specified"} — generate dishes that match this pace. Larger batch portions if cooking less frequently.
   Favorite meals (include if reasonable): ${config.favoriteMeals.length ? config.favoriteMeals.join(", ") : "(none yet)"}
 
 RECENT HISTORY (avoid repeating identical dishes from the previous 4 weeks)
@@ -80,7 +97,7 @@ Return ONLY valid JSON. No markdown fences, no prose before or after. Schema:
 {
   "meals": [
     {
-      "day": "Mon",
+      "day": "${daysToPlan[0] ?? "Mon"}",
       "name": "Specific dish name",
       "cuisine": "Indian | Mediterranean | etc.",
       "calories": 600,
@@ -92,7 +109,7 @@ Return ONLY valid JSON. No markdown fences, no prose before or after. Schema:
       "instructions": "2-3 sentences of cooking steps. Not a full recipe.",
       "youtube_query": "palak paneer authentic recipe restaurant style"
     }
-    // 7 entries total, day fields Mon, Tue, Wed, Thu, Fri, Sat, Sun in order
+    // ${mealCount} entries total, day fields in order: ${dayList}
   ]
 }`;
 }

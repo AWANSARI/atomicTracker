@@ -12,16 +12,20 @@ export function PrepClient({
   plan,
   mealtimes,
   initialPrepped,
+  defaultBreakfast,
+  defaultLunch,
 }: {
   plan: MealPlan;
   mealtimes: { breakfast: string; lunch: string; dinner: string };
   initialPrepped: string[];
+  defaultBreakfast?: string;
+  defaultLunch?: string;
 }) {
   const [prepped, setPrepped] = useState<Set<Day>>(
     new Set(initialPrepped.filter((d): d is Day => true) as Day[]),
   );
-  const [breakfast, setBreakfast] = useState("");
-  const [lunch, setLunch] = useState("");
+  const [breakfast, setBreakfast] = useState(defaultBreakfast ?? "");
+  const [lunch, setLunch] = useState(defaultLunch ?? "");
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);

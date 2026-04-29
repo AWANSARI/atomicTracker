@@ -6,8 +6,10 @@ import { saveMealPlannerConfig } from "../actions";
 import {
   ALL_DIETS,
   COMMON_ALLERGIES,
+  COOKING_FREQUENCIES,
   CUISINES,
   CUISINE_INGREDIENTS,
+  DAYS_OF_WEEK,
   DIET_GROUPS,
   HEALTH_OPTIONS,
 } from "@/lib/tracker/meal-planner-defaults";
@@ -16,17 +18,20 @@ import {
   type MealPlannerConfig,
 } from "@/lib/tracker/meal-planner-types";
 
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 const STEP_LABELS = [
   "Diet",
   "Health",
   "Allergies",
   "Cuisines",
   "Ingredients",
-  "Frequency",
+  "Repeats",
+  "Cook freq",
+  "Cheat day",
   "Times",
   "Review",
 ];
+const LAST_STEP: Step = 9;
 
 export function MealPlannerWizard({
   initialConfig,
@@ -54,7 +59,7 @@ export function MealPlannerWizard({
   }
 
   function next() {
-    if (step < 7) setStep((step + 1) as Step);
+    if (step < LAST_STEP) setStep((step + 1) as Step);
   }
   function back() {
     if (step > 0) setStep((step - 1) as Step);
@@ -175,13 +180,33 @@ export function MealPlannerWizard({
       ) : null}
 
       {step === 6 ? (
-        <MealtimesStep
-          value={config.mealtimes}
-          onChange={(mt) => update("mealtimes", mt)}
+        <CookingFrequencyStep
+          value={config.cookingFrequency}
+          custom={config.customCookingFrequency ?? ""}
+          onChange={(v) => update("cookingFrequency", v)}
+          onCustom={(v) => update("customCookingFrequency", v || undefined)}
         />
       ) : null}
 
       {step === 7 ? (
+        <CheatDayStep
+          value={config.cheatDay}
+          onChange={(v) => update("cheatDay", v)}
+        />
+      ) : null}
+
+      {step === 8 ? (
+        <MealtimesStep
+          value={config.mealtimes}
+          onChange={(mt) => update("mealtimes", mt)}
+          defaultBreakfast={config.defaultBreakfast ?? ""}
+          defaultLunch={config.defaultLunch ?? ""}
+          onBreakfastChange={(v) => update("defaultBreakfast", v || undefined)}
+          onLunchChange={(v) => update("defaultLunch", v || undefined)}
+        />
+      ) : null}
+
+      {step === 9 ? (
         <ReviewStep config={config} suggested={suggestedIngredients.length} />
       ) : null}
 
@@ -197,7 +222,7 @@ export function MealPlannerWizard({
         <span className="text-xs text-slate-400">
           Step {step + 1} of {STEP_LABELS.length}
         </span>
-        {step < 7 ? (
+        {step < LAST_STEP ? (
           <button
             type="button"
             onClick={next}
@@ -478,28 +503,147 @@ function FrequencyStep({
   );
 }
 
-function MealtimesStep({
+function CookingFrequencyStep({
+  value,
+  custom,
+  onChange,
+  onCustom,
+}: {
+  value: MealPlannerConfig["cookingFrequency"];
+  custom: string;
+  onChange: (v: MealPlannerConfig["cookingFrequency"]) => void;
+  onCustom: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <Heading
+        title="How often do you cook?"
+        hint="Affects how many distinct dinners the AI generates. Leftovers fill the rest."
+      />
+      <div className="space-y-2">
+        {COOKING_FREQUENCIES.map((opt) => {
+          const on = value === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => onChange(opt.id)}
+              className={`block w-full rounded-xl border p-3 text-left transition ${
+                on
+                  ? "border-brand-500 bg-brand-50 dark:bg-brand-950"
+                  : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
+              }`}
+            >
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+                {opt.label}
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                {opt.hint}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+      {value === "custom" ? (
+        <CustomInput
+          placeholder="Describe your cooking pattern"
+          value={custom}
+          onChange={onCustom}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function CheatDayStep({
   value,
   onChange,
 }: {
+  value: MealPlannerConfig["cheatDay"];
+  onChange: (v: MealPlannerConfig["cheatDay"]) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <Heading
+        title="Cheat day"
+        hint="Pick a day with no planned meal — eat out, order in, whatever. Skip if you don't want one."
+      />
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+            value === null
+              ? "bg-brand-600 text-white"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          No cheat day
+        </button>
+        {DAYS_OF_WEEK.map((d) => {
+          const on = value === d.id;
+          return (
+            <button
+              key={d.id}
+              type="button"
+              onClick={() =>
+                onChange(d.id as MealPlannerConfig["cheatDay"])
+              }
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                on
+                  ? "bg-brand-600 text-white"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              }`}
+            >
+              {d.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MealtimesStep({
+  value,
+  onChange,
+  defaultBreakfast,
+  defaultLunch,
+  onBreakfastChange,
+  onLunchChange,
+}: {
   value: { breakfast: string; lunch: string; dinner: string };
   onChange: (mt: { breakfast: string; lunch: string; dinner: string }) => void;
+  defaultBreakfast: string;
+  defaultLunch: string;
+  onBreakfastChange: (v: string) => void;
+  onLunchChange: (v: string) => void;
 }) {
   return (
     <div className="space-y-4">
       <Heading
         title="Mealtime defaults"
-        hint="Used by the Sunday prep flow when adding breakfast/lunch/dinner to your Calendar."
+        hint="Times + your usual breakfast/lunch (auto-fills the prep check-in)."
       />
       <TimeRow
         label="Breakfast"
         value={value.breakfast}
         onChange={(v) => onChange({ ...value, breakfast: v })}
       />
+      <CustomInput
+        placeholder="Default breakfast (e.g. Overnight oats)"
+        value={defaultBreakfast}
+        onChange={onBreakfastChange}
+      />
       <TimeRow
         label="Lunch"
         value={value.lunch}
         onChange={(v) => onChange({ ...value, lunch: v })}
+      />
+      <CustomInput
+        placeholder="Default lunch (e.g. Quinoa salad)"
+        value={defaultLunch}
+        onChange={onLunchChange}
       />
       <TimeRow
         label="Dinner"
@@ -508,6 +652,15 @@ function MealtimesStep({
       />
     </div>
   );
+}
+
+function freqLabel(id: MealPlannerConfig["cookingFrequency"]): string {
+  return COOKING_FREQUENCIES.find((f) => f.id === id)?.label ?? id;
+}
+
+function dayLabel(id: MealPlannerConfig["cheatDay"]): string {
+  if (!id) return "None";
+  return DAYS_OF_WEEK.find((d) => d.id === id)?.label ?? id;
 }
 
 function ReviewStep({
@@ -546,10 +699,23 @@ function ReviewStep({
       />
       <ReviewRow label="Repeats / week" value={`${config.repeatsPerWeek}`} />
       <ReviewRow
+        label="Cook frequency"
+        value={
+          config.cookingFrequency === "custom" && config.customCookingFrequency
+            ? `Custom · ${config.customCookingFrequency}`
+            : freqLabel(config.cookingFrequency)
+        }
+      />
+      <ReviewRow label="Cheat day" value={dayLabel(config.cheatDay)} />
+      <ReviewRow
         label="Mealtimes"
         value={`B ${config.mealtimes.breakfast} · L ${config.mealtimes.lunch} · D ${config.mealtimes.dinner}`}
       />
-      <p className="mt-4 text-[11px] text-slate-400">
+      <ReviewRow
+        label="Default B/L"
+        value={`${config.defaultBreakfast || "—"} / ${config.defaultLunch || "—"}`}
+      />
+      <p className="mt-4 text-[11px] text-slate-400 dark:text-slate-500">
         Saves to /AtomicTracker/config/tracker.meal-planner.json on your Drive.
         Plain JSON — not encrypted (preferences, not secrets).
       </p>

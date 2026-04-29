@@ -1,26 +1,17 @@
 import Link from "next/link";
 import { hasMealPlannerConfig } from "./meal-planner/actions";
+import { AppShell } from "@/components/AppShell";
 
 export default async function TrackersPage() {
   const mealPlannerConfigured = await hasMealPlannerConfig();
 
   return (
-    <main className="mx-auto min-h-dvh max-w-md px-6 py-10">
-      <header className="flex items-center gap-3">
-        <Link
-          href="/dashboard"
-          aria-label="Back to dashboard"
-          className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-        >
-          ←
-        </Link>
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight">Trackers</h1>
-          <p className="text-xs text-slate-500">Pick what to track</p>
-        </div>
-      </header>
-
-      <section className="mt-8 space-y-3">
+    <AppShell
+      title="Trackers"
+      subtitle="Pick what to track"
+      backHref="/dashboard"
+    >
+      <section className="space-y-3">
         <TrackerCard
           href={
             mealPlannerConfigured
@@ -52,11 +43,11 @@ export default async function TrackersPage() {
         />
       </section>
 
-      <p className="mt-8 text-center text-xs text-slate-400">
+      <p className="mt-8 text-center text-xs text-slate-400 dark:text-slate-500">
         Trackers are designed as plug-ins. The first one (meal planner)
         validates the pattern; more arrive once Phase 1 ships.
       </p>
-    </main>
+    </AppShell>
   );
 }
 
@@ -102,7 +93,7 @@ function TrackerCard({
 
   if (status === "coming-soon") {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 opacity-70">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 opacity-70 dark:border-slate-800 dark:bg-slate-900">
         {inner}
       </div>
     );
@@ -110,7 +101,7 @@ function TrackerCard({
   return (
     <Link
       href={href ?? "#"}
-      className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-300 hover:bg-brand-50"
+      className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-300 hover:bg-brand-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-brand-600 dark:hover:bg-slate-800"
     >
       {inner}
     </Link>

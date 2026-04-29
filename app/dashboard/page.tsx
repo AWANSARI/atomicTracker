@@ -3,6 +3,7 @@ import { auth, signOut } from "@/auth";
 import { findFile, readAtomicTrackerLayout } from "@/lib/google/drive";
 import { bootstrapDriveFolder } from "./actions";
 import { hasMealPlannerConfig } from "@/app/trackers/meal-planner/actions";
+import { AppShell } from "@/components/AppShell";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -32,46 +33,26 @@ export default async function DashboardPage() {
     : false;
 
   return (
-    <main className="mx-auto min-h-dvh max-w-md px-6 py-10">
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div
-            aria-hidden
-            className="grid h-10 w-10 place-items-center rounded-xl bg-brand-600 text-lg font-bold text-white shadow-sm"
+    <AppShell
+      title="AtomicTracker"
+      subtitle="Dashboard"
+      rightSlot={
+        <form
+          action={async () => {
+            "use server";
+            await signOut({ redirectTo: "/" });
+          }}
+        >
+          <button
+            type="submit"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
           >
-            A
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight">
-              AtomicTracker
-            </h1>
-            <p className="text-xs text-slate-500">Dashboard</p>
-          </div>
-        </div>
-        <nav className="flex items-center gap-2">
-          <Link
-            href="/settings"
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            Settings
-          </Link>
-          <form
-            action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/" });
-            }}
-          >
-            <button
-              type="submit"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Sign out
-            </button>
-          </form>
-        </nav>
-      </header>
-
-      <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            Sign out
+          </button>
+        </form>
+      }
+    >
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center gap-3">
           {user.image ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -82,19 +63,19 @@ export default async function DashboardPage() {
               referrerPolicy="no-referrer"
             />
           ) : (
-            <div className="grid h-12 w-12 place-items-center rounded-full bg-brand-100 text-base font-semibold text-brand-700">
+            <div className="grid h-12 w-12 place-items-center rounded-full bg-brand-100 text-base font-semibold text-brand-700 dark:bg-brand-900 dark:text-brand-100">
               {(user.name ?? user.email ?? "?").slice(0, 1).toUpperCase()}
             </div>
           )}
           <div>
-            <p className="text-sm font-semibold text-slate-900">{user.name}</p>
-            <p className="text-xs text-slate-500">{user.email}</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">{user.name}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
           </div>
         </div>
       </section>
 
       <section className="mt-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Connections
         </h2>
         <ul className="mt-3 space-y-2">
@@ -164,7 +145,7 @@ export default async function DashboardPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Trackers
         </h2>
         <Link
@@ -205,8 +186,8 @@ export default async function DashboardPage() {
         </Link>
       </section>
 
-      <section className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
-        <p className="font-medium text-slate-900">Phase 1 is live</p>
+      <section className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+        <p className="font-medium text-slate-900 dark:text-slate-50">Phase 1 is live</p>
         <p className="mt-2">
           Sign-in, encrypted connector store, AI plan generation (Claude /
           OpenAI / Gemini), per-meal lock + swap, regenerate-with-locks, chat
@@ -214,14 +195,14 @@ export default async function DashboardPage() {
           prep check-in, and data export are all shipped. See{" "}
           <a
             href="https://github.com/AWANSARI/atomicTracker/blob/main/PLAN.md"
-            className="font-medium text-brand-700 underline-offset-2 hover:underline"
+            className="font-medium text-brand-700 underline-offset-2 hover:underline dark:text-brand-400"
           >
             PLAN.md
           </a>{" "}
           for the Phase 2 roadmap (OpenClaw, Telegram, ordering deep-links).
         </p>
       </section>
-    </main>
+    </AppShell>
   );
 }
 

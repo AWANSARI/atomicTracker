@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { auth, signOut } from "@/auth";
+import { AppShell } from "@/components/AppShell";
 import { PassphraseSection } from "./PassphraseSection";
 import { ConnectorWizard } from "./ConnectorWizard";
 import { DataExport } from "./DataExport";
@@ -10,21 +10,11 @@ export default async function SettingsPage() {
   const googleSub = session!.googleSub!;
 
   return (
-    <main className="mx-auto min-h-dvh max-w-md px-6 py-10">
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard"
-            aria-label="Back to dashboard"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-          >
-            ←
-          </Link>
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
-            <p className="text-xs text-slate-500">{user.email}</p>
-          </div>
-        </div>
+    <AppShell
+      title="Settings"
+      subtitle={user.email ?? undefined}
+      backHref="/dashboard"
+      rightSlot={
         <form
           action={async () => {
             "use server";
@@ -33,13 +23,13 @@ export default async function SettingsPage() {
         >
           <button
             type="submit"
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             Sign out
           </button>
         </form>
-      </header>
-
+      }
+    >
       <Section
         title="Encryption passphrase"
         description="Used to encrypt your AI provider keys before they're saved to your Drive. The passphrase never leaves your browser."
@@ -80,7 +70,7 @@ export default async function SettingsPage() {
       >
         <DataExport />
       </Section>
-    </main>
+    </AppShell>
   );
 }
 
@@ -94,12 +84,12 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+    <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {title}
       </h2>
       {description ? (
-        <p className="mt-1 text-xs text-slate-500">{description}</p>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{description}</p>
       ) : null}
       <div className="mt-4">{children}</div>
     </section>
@@ -108,9 +98,9 @@ function Section({
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-      <span className="text-xs text-slate-600">{label}</span>
-      <span className="text-xs font-medium text-slate-900">{value}</span>
+    <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950">
+      <span className="text-xs text-slate-600 dark:text-slate-400">{label}</span>
+      <span className="text-xs font-medium text-slate-900 dark:text-slate-100">{value}</span>
     </div>
   );
 }

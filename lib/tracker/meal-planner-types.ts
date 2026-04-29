@@ -29,12 +29,30 @@ export type MealPlannerConfig = {
   /** How many times per week the same dish may repeat. 1-7. */
   repeatsPerWeek: number;
 
+  /**
+   * How often the user actually cooks. Affects the AI plan:
+   *  - "daily": 7 unique dinners
+   *  - "alternate": 4 dinners (Mon/Wed/Fri/Sun) eaten over leftover days
+   *  - "twice-weekly": 2 batch cook sessions, larger portions
+   *  - "weekly": 1 big batch cook for the week
+   *  - "custom": (free text in customCookingFrequency)
+   */
+  cookingFrequency: "daily" | "alternate" | "twice-weekly" | "weekly" | "custom";
+  customCookingFrequency?: string;
+
+  /** Day of week with no planned meal — eat what you want. null = no cheat day. */
+  cheatDay: "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun" | null;
+
   /** Mealtime defaults for Sunday prep flow (HH:MM in user's local tz). */
   mealtimes: {
     breakfast: string;
     lunch: string;
     dinner: string;
   };
+
+  /** Default breakfast/lunch dish — pre-fills prep check-in fields. */
+  defaultBreakfast?: string;
+  defaultLunch?: string;
 
   /** Populated as user marks favorites; empty on first save. */
   favoriteMeals: string[];
@@ -57,6 +75,8 @@ export function emptyMealPlannerConfig(): MealPlannerConfig {
     ingredients: [],
     customIngredients: [],
     repeatsPerWeek: 2,
+    cookingFrequency: "daily",
+    cheatDay: null,
     mealtimes: {
       breakfast: "08:00",
       lunch: "12:30",

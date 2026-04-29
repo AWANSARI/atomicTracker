@@ -102,6 +102,48 @@ export const CUISINES: Option[] = [
   { id: "middle-eastern", label: "Middle Eastern" },
 ];
 
+// ─── Cooking frequency ──────────────────────────────────────────────────────
+
+export const COOKING_FREQUENCIES: { id: "daily" | "alternate" | "twice-weekly" | "weekly" | "custom"; label: string; hint: string }[] = [
+  {
+    id: "daily",
+    label: "Daily",
+    hint: "Cook fresh every day. 7 unique dinners.",
+  },
+  {
+    id: "alternate",
+    label: "Alternate days",
+    hint: "Cook every other day, eat leftovers in between. ~4 dinners.",
+  },
+  {
+    id: "twice-weekly",
+    label: "Twice a week",
+    hint: "Two batch-cook sessions, larger portions. 2-3 dinners.",
+  },
+  {
+    id: "weekly",
+    label: "Once a week",
+    hint: "One big batch cook for the whole week. 1-2 dinners.",
+  },
+  {
+    id: "custom",
+    label: "Custom",
+    hint: "Describe your own pattern.",
+  },
+];
+
+// ─── Days of week (used for cheat day picker) ───────────────────────────────
+
+export const DAYS_OF_WEEK: Option[] = [
+  { id: "Mon", label: "Monday" },
+  { id: "Tue", label: "Tuesday" },
+  { id: "Wed", label: "Wednesday" },
+  { id: "Thu", label: "Thursday" },
+  { id: "Fri", label: "Friday" },
+  { id: "Sat", label: "Saturday" },
+  { id: "Sun", label: "Sunday" },
+];
+
 // ─── Per-cuisine suggested ingredients ─────────────────────────────────────
 
 export const CUISINE_INGREDIENTS: Record<string, string[]> = {

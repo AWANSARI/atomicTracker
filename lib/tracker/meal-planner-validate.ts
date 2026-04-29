@@ -49,7 +49,10 @@ export function parseSingleMeal(item: unknown): Meal | null {
   };
 }
 
-/** Parse `{ meals: [...] }` shape. Returns null if the array isn't exactly 7 valid meals. */
+/**
+ * Parse `{ meals: [...] }` shape. Returns null if any meal is malformed.
+ * Allows 1-7 meals (cheat day or low-cook-frequency configs may have fewer).
+ */
 export function parseMeals(json: unknown): Meal[] | null {
   if (!json || typeof json !== "object") return null;
   const j = json as Record<string, unknown>;
@@ -60,7 +63,7 @@ export function parseMeals(json: unknown): Meal[] | null {
     if (!m) return null;
     out.push(m);
   }
-  if (out.length !== 7) return null;
+  if (out.length < 1 || out.length > 7) return null;
   return out;
 }
 

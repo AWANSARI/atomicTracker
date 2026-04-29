@@ -15,6 +15,7 @@ import {
   CUISINES,
   HEALTH_OPTIONS,
 } from "@/lib/tracker/meal-planner-defaults";
+import { AppShell } from "@/components/AppShell";
 
 const APP_VERSION = "0.1.0";
 
@@ -47,32 +48,20 @@ export default async function MealPlannerHomePage() {
   }
 
   return (
-    <main className="mx-auto min-h-dvh max-w-md px-6 py-10">
-      <header className="flex items-center gap-3">
-        <Link
-          href="/trackers"
-          aria-label="Back to trackers"
-          className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-        >
-          ←
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-lg font-semibold tracking-tight">
-            Weekly Meal Planner
-          </h1>
-          <p className="text-xs text-slate-500">
-            Updated {formatRelative(config.updatedAt)}
-          </p>
-        </div>
+    <AppShell
+      title="Weekly Meal Planner"
+      subtitle={`Updated ${formatRelative(config.updatedAt)}`}
+      backHref="/trackers"
+      rightSlot={
         <Link
           href="/trackers/meal-planner/setup"
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
         >
           Edit
         </Link>
-      </header>
-
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      }
+    >
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
           Configuration
         </h2>
@@ -135,8 +124,8 @@ export default async function MealPlannerHomePage() {
         </dl>
       </section>
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           {targetWeekId}
         </h2>
         <p className="mt-1 text-xs text-slate-500">
@@ -155,8 +144,8 @@ export default async function MealPlannerHomePage() {
         </div>
       </section>
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Prep check-in
         </h2>
         <p className="mt-1 text-xs text-slate-500">
@@ -165,31 +154,22 @@ export default async function MealPlannerHomePage() {
         </p>
         <Link
           href="/trackers/meal-planner/prep"
-          className="mt-4 block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          className="mt-4 block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
         >
           Open prep check-in →
         </Link>
       </section>
-
-      <section className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
-        <p className="font-medium text-slate-900">Phase 1 wrap-up</p>
-        <p className="mt-2">
-          Commit 5 (this one) saves your config. Commits 6-8 wire up plan
-          generation, review/swap UI, acceptance flow that writes the grocery
-          CSV and Calendar reminders, and the Sunday prep check-in.
-        </p>
-      </section>
-    </main>
+    </AppShell>
   );
 }
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2">
-      <dt className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-500">
+    <div className="flex items-start justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
+      <dt className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {label}
       </dt>
-      <dd className="text-right text-xs text-slate-900">{value}</dd>
+      <dd className="text-right text-xs text-slate-900 dark:text-slate-100">{value}</dd>
     </div>
   );
 }
