@@ -47,6 +47,9 @@ export type MealPlan = {
   };
   status: "draft" | "accepted";
   meals: Meal[];
+  /** IDs of Calendar events created at the last accept. Used to delete on re-accept. */
+  calendarEventIds?: string[];
+  acceptedAt?: string;
 };
 
 // ─── ISO week helpers ──────────────────────────────────────────────────────

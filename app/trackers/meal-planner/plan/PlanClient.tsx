@@ -21,7 +21,11 @@ type ChatMsg = { role: "user" | "assistant"; content: string };
 type AcceptResult = {
   ok: boolean;
   csv?: { driveFileId: string; itemCount: number };
-  calendar?: { events: { name: string; ok: boolean; htmlLink?: string; error?: string }[] };
+  calendar?: {
+    events: { name: string; ok: boolean; htmlLink?: string; error?: string }[];
+    deleted?: { id: string; deleted: boolean; error?: string }[];
+  };
+  reaccept?: boolean;
 };
 
 type ConnectorsPayload = {
@@ -260,31 +264,28 @@ export function PlanClient({
       {/* Accept */}
       <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Accept
+          {isAccepted ? "Re-accept" : "Accept"}
         </h2>
-        {!acceptResult && !isAccepted ? (
-          <>
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              Writes the grocery CSV to /grocery, marks the plan as accepted,
-              and creates Friday + Sunday recurring reminders plus a Saturday
-              grocery event on your Calendar.
-            </p>
-            <button
-              type="button"
-              onClick={onAccept}
-              disabled={accepting || busyDay !== null}
-              className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {accepting ? "Saving + creating events…" : "Accept this plan"}
-            </button>
-          </>
-        ) : (
-          <AcceptedSummary
-            result={acceptResult}
-            isAlreadyAccepted={isAccepted && !acceptResult}
-            weekId={plan.weekId}
-          />
-        )}
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          {isAccepted
+            ? "If you've swapped or regenerated meals, re-accept to overwrite the grocery CSV and replace the existing Calendar events with the new plan."
+            : "Writes the grocery CSV to /grocery, marks the plan as accepted, and creates Friday + Sunday recurring reminders plus a Saturday grocery event on your Calendar."}
+        </p>
+        <button
+          type="button"
+          onClick={onAccept}
+          disabled={accepting || busyDay !== null}
+          className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {accepting
+            ? "Updating Drive + Calendar…"
+            : isAccepted
+              ? "Re-accept · overwrite Calendar"
+              : "Accept this plan"}
+        </button>
+        {acceptResult ? (
+          <AcceptedSummary result={acceptResult} weekId={plan.weekId} />
+        ) : null}
       </section>
 
       {/* Chat FAB */}
@@ -314,28 +315,20 @@ export function PlanClient({
 
 function AcceptedSummary({
   result,
-  isAlreadyAccepted,
   weekId,
 }: {
-  result: AcceptResult | null;
-  isAlreadyAccepted: boolean;
+  result: AcceptResult;
   weekId: string;
 }) {
-  if (isAlreadyAccepted && !result) {
-    return (
-      <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-400">
-        This plan is already accepted. Re-accepting would overwrite the
-        grocery CSV and create new Calendar events.
-      </p>
-    );
-  }
-  if (!result) return null;
   const events = result.calendar?.events ?? [];
+  const deleted = result.calendar?.deleted ?? [];
+  const deletedCount = deleted.filter((d) => d.deleted).length;
   return (
     <div className="mt-3 space-y-3 text-sm">
       <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-        Plan accepted. Grocery list with {result.csv?.itemCount ?? 0} items
-        written to your Drive.
+        {result.reaccept
+          ? `Re-accepted. Removed ${deletedCount} previous Calendar event${deletedCount === 1 ? "" : "s"} and rewrote the grocery list.`
+          : "Plan accepted. Grocery list and Calendar events written."}
       </div>
       {result.csv ? (
         <a

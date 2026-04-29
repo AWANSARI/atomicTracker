@@ -8,7 +8,7 @@ import {
   upsertJson,
   upsertText,
 } from "@/lib/google/drive";
-import { createEvent, localDateTime } from "@/lib/google/calendar";
+import { createEvent, deleteEvent, localDateTime } from "@/lib/google/calendar";
 import { buildGroceryRows, rowsToCsv } from "@/lib/tracker/grocery";
 import {
   type MealPlan,
@@ -68,6 +68,25 @@ export async function POST(req: Request) {
     );
   }
 
+  // 0. If this plan was previously accepted, delete its existing Calendar
+  // events so this accept truly *overwrites* rather than duplicates.
+  const previousEventIds = Array.isArray(plan.calendarEventIds)
+    ? plan.calendarEventIds
+    : [];
+  const deletionResults: { id: string; deleted: boolean; error?: string }[] = [];
+  for (const eventId of previousEventIds) {
+    try {
+      const deleted = await deleteEvent(session.accessToken, eventId);
+      deletionResults.push({ id: eventId, deleted });
+    } catch (e) {
+      deletionResults.push({
+        id: eventId,
+        deleted: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
   // 1. Build + write grocery CSV and JSON mirror
   const rows = buildGroceryRows(plan);
   const csv = rowsToCsv(rows);
@@ -94,10 +113,14 @@ export async function POST(req: Request) {
     );
   }
 
-  // 2. Save plan as accepted, delete draft if it was a separate file
+  // 2. Save plan as accepted, delete draft if it was a separate file.
+  // Note: we set acceptedAt + reset calendarEventIds (filled below) so the
+  // plan reflects this accept's events, not stale ones.
   const acceptedPlan: MealPlan = {
     ...plan,
     status: "accepted",
+    acceptedAt: new Date().toISOString(),
+    calendarEventIds: [],
   };
   let acceptedFileId: string;
   try {
@@ -131,6 +154,7 @@ export async function POST(req: Request) {
   const prepCheckinUrl = `${PLAN_DEEP_LINK_BASE}/trackers/meal-planner/prep?week=${weekId}`;
 
   const eventResults: { name: string; ok: boolean; htmlLink?: string; error?: string }[] = [];
+  const newEventIds: string[] = [];
 
   try {
     const ev1 = await createEvent(session.accessToken, {
@@ -145,6 +169,7 @@ export async function POST(req: Request) {
         overrides: [{ method: "popup", minutes: 0 }],
       },
     });
+    newEventIds.push(ev1.id);
     eventResults.push({ name: "Friday plan reminder", ok: true, htmlLink: ev1.htmlLink });
   } catch (e) {
     eventResults.push({
@@ -167,6 +192,7 @@ export async function POST(req: Request) {
         overrides: [{ method: "popup", minutes: 0 }],
       },
     });
+    newEventIds.push(ev2.id);
     eventResults.push({ name: "Sunday prep check-in", ok: true, htmlLink: ev2.htmlLink });
   } catch (e) {
     eventResults.push({
@@ -195,10 +221,29 @@ export async function POST(req: Request) {
         overrides: [{ method: "popup", minutes: 60 }],
       },
     });
+    newEventIds.push(ev3.id);
     eventResults.push({ name: "Grocery shopping", ok: true, htmlLink: ev3.htmlLink });
   } catch (e) {
     eventResults.push({
       name: "Grocery shopping",
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+
+  // Persist the new event IDs back into the accepted plan so a future
+  // re-accept can delete *these* events instead of leaking duplicates.
+  acceptedPlan.calendarEventIds = newEventIds;
+  try {
+    await upsertJson(
+      session.accessToken,
+      mealsFolderId,
+      `${weekId}.json`,
+      acceptedPlan,
+    );
+  } catch (e) {
+    eventResults.push({
+      name: "Save plan with event IDs",
       ok: false,
       error: e instanceof Error ? e.message : String(e),
     });
@@ -215,7 +260,9 @@ export async function POST(req: Request) {
     },
     calendar: {
       events: eventResults,
+      deleted: deletionResults,
     },
+    reaccept: previousEventIds.length > 0,
   });
 }
 

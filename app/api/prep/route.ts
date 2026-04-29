@@ -6,7 +6,7 @@ import {
   readJson,
   upsertJson,
 } from "@/lib/google/drive";
-import { addMinutes, createEvent, localDateTime } from "@/lib/google/calendar";
+import { addMinutes, createEvent, deleteEvent, localDateTime } from "@/lib/google/calendar";
 import { readMealPlannerConfig } from "@/app/trackers/meal-planner/actions";
 import {
   type Day,
@@ -92,9 +92,43 @@ export async function POST(req: Request) {
     );
   }
 
+  // 0. If a previous prep submission exists for this week, delete its events
+  // so re-submission overwrites cleanly (no duplicate B/L/D entries).
+  const existingPrepFileId = await findFile(
+    session.accessToken,
+    `${weekId}-prep.json`,
+    mealsFolderId,
+  );
+  let previousEventIds: string[] = [];
+  if (existingPrepFileId) {
+    try {
+      const previousPrep = await readJson<{ calendarEventIds?: unknown }>(
+        session.accessToken,
+        existingPrepFileId,
+      );
+      if (Array.isArray(previousPrep.calendarEventIds)) {
+        previousEventIds = previousPrep.calendarEventIds.filter(
+          (id): id is string => typeof id === "string",
+        );
+      }
+    } catch {
+      // Ignore: malformed previous file, proceed without deletes
+    }
+  }
+  const deletionResults: { id: string; deleted: boolean }[] = [];
+  for (const eventId of previousEventIds) {
+    try {
+      const deleted = await deleteEvent(session.accessToken, eventId);
+      deletionResults.push({ id: eventId, deleted });
+    } catch {
+      deletionResults.push({ id: eventId, deleted: false });
+    }
+  }
+
   // Build the calendar events
   const weekStartDate = new Date(plan.weekStart + "T00:00:00Z");
   const events: { name: string; ok: boolean; htmlLink?: string; error?: string }[] = [];
+  const newEventIds: string[] = [];
 
   // 1. Dinner events for prepped days
   for (const day of prepped) {
@@ -133,6 +167,7 @@ export async function POST(req: Request) {
           ? { source: { title: "Recipe video", url: meal.recipe_url } }
           : {}),
       });
+      newEventIds.push(ev.id);
       events.push({ name: `${day} · ${meal.name}`, ok: true, htmlLink: ev.htmlLink });
     } catch (e) {
       events.push({
@@ -162,6 +197,7 @@ export async function POST(req: Request) {
           end,
           reminders: { useDefault: false },
         });
+        newEventIds.push(ev.id);
         events.push({ name: `${day} · breakfast`, ok: true, htmlLink: ev.htmlLink });
       } catch (e) {
         events.push({
@@ -192,6 +228,7 @@ export async function POST(req: Request) {
           end,
           reminders: { useDefault: false },
         });
+        newEventIds.push(ev.id);
         events.push({ name: `${day} · lunch`, ok: true, htmlLink: ev.htmlLink });
       } catch (e) {
         events.push({
@@ -203,7 +240,8 @@ export async function POST(req: Request) {
     }
   }
 
-  // 4. Save prep state to /history/meals/{weekId}-prep.json
+  // 4. Save prep state to /history/meals/{weekId}-prep.json — including the
+  // new event IDs so a future re-submission can delete these events first.
   try {
     await upsertJson(session.accessToken, mealsFolderId, `${weekId}-prep.json`, {
       v: 1,
@@ -213,6 +251,7 @@ export async function POST(req: Request) {
       lunch: lunch || undefined,
       submittedAt: new Date().toISOString(),
       timezone,
+      calendarEventIds: newEventIds,
     });
   } catch (e) {
     return NextResponse.json(
@@ -226,5 +265,10 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, events });
+  return NextResponse.json({
+    ok: true,
+    events,
+    deleted: deletionResults,
+    resubmit: previousEventIds.length > 0,
+  });
 }

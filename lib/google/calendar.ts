@@ -78,6 +78,29 @@ export async function createEvent(
 }
 
 /**
+ * Delete an event by ID. Returns true if deleted, false if it didn't exist
+ * (404/410 — treated as success since the goal is "make sure it's gone").
+ * Other errors throw.
+ */
+export async function deleteEvent(
+  accessToken: string,
+  eventId: string,
+  calendarId = "primary",
+): Promise<boolean> {
+  const res = await fetch(
+    `${CAL_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+  if (res.status === 204) return true;
+  if (res.status === 404 || res.status === 410) return false;
+  const body = await res.text().catch(() => "");
+  throw new CalendarError(res.statusText, res.status, body);
+}
+
+/**
  * Build an RFC3339 dateTime string for a specific date + HH:MM in a timezone.
  * Google Calendar accepts ISO without offset when timeZone is provided.
  */
