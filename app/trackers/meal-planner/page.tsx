@@ -1,12 +1,22 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { readMealPlannerConfig } from "./actions";
+import { GenerateClient } from "./GenerateClient";
+import { findFile } from "@/lib/google/drive";
+import { ensureAtomicTrackerLayout } from "@/lib/google/drive";
+import {
+  isoWeekId,
+  nextWeekStart,
+} from "@/lib/tracker/meal-planner-plan";
 import {
   ALL_DIETS,
   COMMON_ALLERGIES,
   CUISINES,
   HEALTH_OPTIONS,
 } from "@/lib/tracker/meal-planner-defaults";
+
+const APP_VERSION = "0.1.0";
 
 function labelFor(options: { id: string; label: string }[], id: string): string {
   return options.find((o) => o.id === id)?.label ?? id;
@@ -16,6 +26,24 @@ export default async function MealPlannerHomePage() {
   const config = await readMealPlannerConfig();
   if (!config) {
     redirect("/trackers/meal-planner/setup");
+  }
+  const session = await auth();
+  const accessToken = session!.accessToken!;
+  const googleSub = session!.googleSub!;
+
+  const targetWeekId = isoWeekId(nextWeekStart());
+
+  // Has a plan (draft or accepted) already been generated for next week?
+  const layout = await ensureAtomicTrackerLayout(accessToken, {
+    googleSub,
+    appVersion: APP_VERSION,
+  });
+  let existingDraftId: string | null = null;
+  const mealsFolderId = layout.folderIds["history/meals"];
+  if (mealsFolderId) {
+    existingDraftId =
+      (await findFile(accessToken, `${targetWeekId}.draft.json`, mealsFolderId)) ||
+      (await findFile(accessToken, `${targetWeekId}.json`, mealsFolderId));
   }
 
   return (
@@ -109,18 +137,22 @@ export default async function MealPlannerHomePage() {
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-          Next week
+          {targetWeekId}
         </h2>
-        <p className="mt-2 text-sm text-slate-600">
-          Plan generation arrives in commit 6.
+        <p className="mt-1 text-xs text-slate-500">
+          Generates 7 dinners using your saved AI key.
         </p>
-        <button
-          type="button"
-          disabled
-          className="mt-4 w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white opacity-50 disabled:cursor-not-allowed"
-        >
-          Generate next week (commit 6)
-        </button>
+        {existingDraftId ? (
+          <Link
+            href={`/trackers/meal-planner/plan?week=${targetWeekId}`}
+            className="mt-4 block w-full rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-900 hover:bg-emerald-100"
+          >
+            View this week&apos;s plan →
+          </Link>
+        ) : null}
+        <div className="mt-4">
+          <GenerateClient googleSub={googleSub} />
+        </div>
       </section>
 
       <section className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
