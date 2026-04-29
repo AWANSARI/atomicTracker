@@ -428,8 +428,8 @@ function ChatSheet({
               <p>Try asking:</p>
               <ul className="ml-4 list-disc space-y-1">
                 <li>&ldquo;Which meal is best for me on a busy day?&rdquo;</li>
-                <li>&ldquo;Suggest a swap for Tuesday that's lighter.&rdquo;</li>
-                <li>&ldquo;Why was Wednesday's fish chosen?&rdquo;</li>
+                <li>&ldquo;Suggest a swap for Tuesday that&rsquo;s lighter.&rdquo;</li>
+                <li>&ldquo;Why was Wednesday&rsquo;s fish chosen?&rdquo;</li>
                 <li>&ldquo;What should I prep on Sunday?&rdquo;</li>
               </ul>
             </div>
