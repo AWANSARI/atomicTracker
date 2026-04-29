@@ -10,17 +10,16 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col px-6 py-10">
-      <header className="flex items-center gap-3">
-        <div
-          aria-hidden
-          className="grid h-10 w-10 place-items-center rounded-xl bg-brand-600 text-lg font-bold text-white shadow-sm"
-        >
-          A
-        </div>
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight">AtomicTracker</h1>
-          <p className="text-xs text-slate-500">Routine, nutrition, hormonal balance</p>
-        </div>
+      <header className="flex flex-col items-start gap-1">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/atomic_tracker_logo_v2_curved_wordmark.svg"
+          alt="AtomicTracker"
+          className="h-14 w-auto"
+        />
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Routine, nutrition, hormonal balance
+        </p>
       </header>
 
       <section className="mt-12 flex-1">

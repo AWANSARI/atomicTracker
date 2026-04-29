@@ -28,31 +28,43 @@ export function AppShell({
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-[#0d1117]/90">
         <div className="mx-auto flex max-w-md items-center gap-3 px-6 py-3">
           {backHref ? (
-            <Link
-              href={backHref}
-              aria-label="Back"
-              className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
+            <>
+              <Link
+                href={backHref}
+                aria-label="Back"
+                className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+              <div className="flex-1 min-w-0">
+                <h1 className="truncate text-base font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+                  {title}
+                </h1>
+                {subtitle ? (
+                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                    {subtitle}
+                  </p>
+                ) : null}
+              </div>
+            </>
           ) : (
-            <div
-              aria-hidden
-              className="grid h-9 w-9 place-items-center rounded-md bg-brand-600 text-sm font-bold text-white"
-            >
-              A
+            // Top-level pages (e.g. dashboard) — show the wordmark instead of
+            // a brand-square + duplicate "AtomicTracker" title. The page's
+            // title prop is the brand name itself in that case.
+            <div className="flex-1 min-w-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/atomic_tracker_logo_v2_curved_wordmark.svg"
+                alt={title}
+                className="h-8 w-auto"
+              />
+              {subtitle ? (
+                <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+                  {subtitle}
+                </p>
+              ) : null}
             </div>
           )}
-          <div className="flex-1 min-w-0">
-            <h1 className="truncate text-base font-semibold tracking-tight text-slate-900 dark:text-slate-50">
-              {title}
-            </h1>
-            {subtitle ? (
-              <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-                {subtitle}
-              </p>
-            ) : null}
-          </div>
           {rightSlot ? <div className="shrink-0">{rightSlot}</div> : null}
         </div>
       </header>
