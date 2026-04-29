@@ -46,23 +46,29 @@ async function loadPlanForWeek(
 }
 
 export default async function MealPlannerHomePage() {
-  const config = await readMealPlannerConfig();
-  if (!config) {
-    redirect("/trackers/meal-planner/setup");
-  }
+  // Fetch session, config, and layout in parallel. readMealPlannerConfig and
+  // ensureAtomicTrackerLayout are both per-request memoized so the underlying
+  // Drive bootstrap roundtrip happens once and is shared.
   const session = await auth();
   const accessToken = session!.accessToken!;
   const googleSub = session!.googleSub!;
+
+  const [config, layout] = await Promise.all([
+    readMealPlannerConfig(),
+    ensureAtomicTrackerLayout(accessToken, {
+      googleSub,
+      appVersion: APP_VERSION,
+    }),
+  ]);
+  if (!config) {
+    redirect("/trackers/meal-planner/setup");
+  }
 
   const currentMonday = currentWeekStart();
   const nextMonday = nextWeekStart();
   const currentId = isoWeekId(currentMonday);
   const nextId = isoWeekId(nextMonday);
 
-  const layout = await ensureAtomicTrackerLayout(accessToken, {
-    googleSub,
-    appVersion: APP_VERSION,
-  });
   const mealsFolderId = layout.folderIds["history/meals"];
 
   const [currentPlan, nextPlan] = await Promise.all([

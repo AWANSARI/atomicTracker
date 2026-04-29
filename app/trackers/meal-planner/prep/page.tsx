@@ -47,10 +47,15 @@ export default async function PrepPage({
   const accessToken = session!.accessToken!;
   const googleSub = session!.googleSub!;
 
-  const layout = await ensureAtomicTrackerLayout(accessToken, {
-    googleSub,
-    appVersion: APP_VERSION,
-  });
+  // Fetch layout + config in parallel; both share the per-request cached
+  // layout roundtrip.
+  const [layout, config] = await Promise.all([
+    ensureAtomicTrackerLayout(accessToken, {
+      googleSub,
+      appVersion: APP_VERSION,
+    }),
+    readMealPlannerConfig(),
+  ]);
   const mealsFolderId = layout.folderIds["history/meals"];
 
   let plan: MealPlan | null = null;
@@ -87,8 +92,6 @@ export default async function PrepPage({
       }>(accessToken, prepFileId).catch(() => null);
     }
   }
-
-  const config = await readMealPlannerConfig();
 
   return (
     <AppShell

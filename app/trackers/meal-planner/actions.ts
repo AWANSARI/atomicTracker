@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import {
@@ -16,13 +17,13 @@ import {
 const APP_VERSION = "0.1.0";
 const CONFIG_FILE = "tracker.meal-planner.json";
 
-async function requireAuth() {
+const requireAuth = cache(async () => {
   const session = await auth();
   if (!session?.accessToken || !session.googleSub) {
     throw new Error("Not authenticated");
   }
   return { accessToken: session.accessToken, googleSub: session.googleSub };
-}
+});
 
 async function getConfigFolderId(token: string, sub: string): Promise<string> {
   const layout = await ensureAtomicTrackerLayout(token, {
@@ -34,7 +35,11 @@ async function getConfigFolderId(token: string, sub: string): Promise<string> {
   return id;
 }
 
-export async function readMealPlannerConfig(): Promise<MealPlannerConfig | null> {
+/**
+ * Wrapped in React `cache()` so layout/page/actions sharing one render
+ * make a single Drive roundtrip. Per-request scope only.
+ */
+export const readMealPlannerConfig = cache(async (): Promise<MealPlannerConfig | null> => {
   const { accessToken, googleSub } = await requireAuth();
   const configId = await getConfigFolderId(accessToken, googleSub);
   const fileId = await findFile(accessToken, CONFIG_FILE, configId);
@@ -74,7 +79,7 @@ export async function readMealPlannerConfig(): Promise<MealPlannerConfig | null>
   } catch {
     return null;
   }
-}
+});
 
 export async function saveMealPlannerConfig(
   config: Omit<MealPlannerConfig, "createdAt" | "updatedAt"> &

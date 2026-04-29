@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 
 /**
  * Minimal Google Drive REST client.
@@ -414,58 +415,80 @@ export async function bootstrapAtomicTrackerFolder(
 /**
  * Read /AtomicTracker/config/user.json if it exists, else null.
  * Used as a fast-path on dashboard load to avoid re-bootstrapping.
+ *
+ * Wrapped in React `cache()` so multiple call sites within a single request
+ * (layout + page + actions) share one Drive roundtrip. Cache scope is
+ * per-request — different requests get fresh data.
  */
-export async function readAtomicTrackerLayout(
-  accessToken: string,
-): Promise<AtomicTrackerLayout | null> {
-  const rootId = await findFolder(accessToken, ROOT_NAME);
-  if (!rootId) return null;
-  const configId = await findFolder(accessToken, "config", rootId);
-  if (!configId) return null;
-  const userJsonId = await findFile(accessToken, "user.json", configId);
-  if (!userJsonId) return null;
-  try {
-    return await readJson<AtomicTrackerLayout>(accessToken, userJsonId);
-  } catch {
-    return null;
-  }
-}
+export const readAtomicTrackerLayout = cache(
+  async (accessToken: string): Promise<AtomicTrackerLayout | null> => {
+    const rootId = await findFolder(accessToken, ROOT_NAME);
+    if (!rootId) return null;
+    const configId = await findFolder(accessToken, "config", rootId);
+    if (!configId) return null;
+    const userJsonId = await findFile(accessToken, "user.json", configId);
+    if (!userJsonId) return null;
+    try {
+      return await readJson<AtomicTrackerLayout>(accessToken, userJsonId);
+    } catch {
+      return null;
+    }
+  },
+);
+
+/**
+ * Internal cached implementation of ensureAtomicTrackerLayout. Args are kept
+ * primitive (string | undefined) so React.cache can use them as the cache
+ * key — passing the options object directly would create a new identity on
+ * every call site and defeat dedup.
+ */
+const _ensureLayoutCached = cache(
+  async (
+    accessToken: string,
+    googleSub: string,
+    appVersion: string,
+    tz: string | undefined,
+    locale: string | undefined,
+  ): Promise<AtomicTrackerLayout> => {
+    // Fast path: user.json already exists AND covers every folder we currently
+    // ship. If the SUBFOLDERS list grew since the cache was written, fall
+    // through to the full bootstrap so existing users get the new folder.
+    const existing = await readAtomicTrackerLayout(accessToken);
+    if (existing && existing.folderIds["config"]) {
+      const allKnown = SUBFOLDERS.every((p) => existing.folderIds[p]);
+      if (allKnown) return existing;
+    }
+
+    const { rootId, folderIds } = await bootstrapAtomicTrackerFolder(accessToken);
+    const layout: AtomicTrackerLayout = {
+      rootId,
+      folderIds,
+      bootstrappedAt: existing?.bootstrappedAt ?? new Date().toISOString(),
+      appVersion,
+    };
+    const persisted = { ...layout, googleSub, tz, locale };
+    const configId = folderIds["config"];
+    if (!configId) throw new Error("config folder missing after bootstrap");
+    await upsertJson(accessToken, configId, "user.json", persisted);
+    return layout;
+  },
+);
 
 /**
  * Full bootstrap + persist user.json with folder IDs and version metadata.
- * Idempotent: safe to call repeatedly.
+ * Idempotent: safe to call repeatedly. Per-request memoized.
  */
 export async function ensureAtomicTrackerLayout(
   accessToken: string,
   options: { googleSub: string; appVersion: string; tz?: string; locale?: string },
 ): Promise<AtomicTrackerLayout> {
-  // Fast path: user.json already exists AND covers every folder we currently
-  // ship. If the SUBFOLDERS list grew since the cache was written (e.g. a new
-  // `history/photos` folder was added in a later commit), fall through to the
-  // full bootstrap so existing users automatically get the new folder.
-  const existing = await readAtomicTrackerLayout(accessToken);
-  if (existing && existing.folderIds["config"]) {
-    const allKnown = SUBFOLDERS.every((p) => existing.folderIds[p]);
-    if (allKnown) return existing;
-  }
-
-  const { rootId, folderIds } = await bootstrapAtomicTrackerFolder(accessToken);
-  const layout: AtomicTrackerLayout = {
-    rootId,
-    folderIds,
-    bootstrappedAt: existing?.bootstrappedAt ?? new Date().toISOString(),
-    appVersion: options.appVersion,
-  };
-  const persisted = {
-    ...layout,
-    googleSub: options.googleSub,
-    tz: options.tz,
-    locale: options.locale,
-  };
-  const configId = folderIds["config"];
-  if (!configId) throw new Error("config folder missing after bootstrap");
-  await upsertJson(accessToken, configId, "user.json", persisted);
-  return layout;
+  return _ensureLayoutCached(
+    accessToken,
+    options.googleSub,
+    options.appVersion,
+    options.tz,
+    options.locale,
+  );
 }
 
 export { DriveError, ROOT_NAME, SUBFOLDERS };
