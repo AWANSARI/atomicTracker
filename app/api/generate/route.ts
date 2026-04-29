@@ -13,10 +13,9 @@ import {
   nextWeekStart,
   weekEnd,
   youtubeSearchUrl,
-  type Day,
-  type Meal,
   type MealPlan,
 } from "@/lib/tracker/meal-planner-plan";
+import { parseMeals } from "@/lib/tracker/meal-planner-validate";
 import { PROVIDERS, type ProviderId } from "@/lib/ai/providers";
 
 // AI generation can take 5-15s; bump from 10s default to give Claude/OpenAI/Gemini headroom.
@@ -136,62 +135,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ ok: true, plan });
-}
-
-// ─── Parsing / validation ───────────────────────────────────────────────────
-
-function parseMeals(json: unknown): Meal[] | null {
-  if (!json || typeof json !== "object") return null;
-  const j = json as Record<string, unknown>;
-  const raw = j.meals;
-  if (!Array.isArray(raw)) return null;
-  const out: Meal[] = [];
-  const validDays: Day[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  for (const item of raw) {
-    if (!item || typeof item !== "object") return null;
-    const m = item as Record<string, unknown>;
-    if (!validDays.includes(m.day as Day)) return null;
-    if (typeof m.name !== "string") return null;
-    if (typeof m.cuisine !== "string") return null;
-    if (typeof m.calories !== "number") return null;
-    if (!m.macros || typeof m.macros !== "object") return null;
-    const macros = m.macros as Record<string, unknown>;
-    if (
-      typeof macros.protein_g !== "number" ||
-      typeof macros.carbs_g !== "number" ||
-      typeof macros.fat_g !== "number" ||
-      typeof macros.fiber_g !== "number"
-    )
-      return null;
-    if (typeof m.health_notes !== "string") return null;
-    if (!Array.isArray(m.ingredients)) return null;
-    const ingredients = m.ingredients.map((i) => {
-      const ing = i as Record<string, unknown>;
-      return {
-        name: String(ing.name ?? ""),
-        qty: String(ing.qty ?? ""),
-        unit: String(ing.unit ?? ""),
-      };
-    });
-    if (typeof m.instructions !== "string") return null;
-    if (typeof m.youtube_query !== "string") return null;
-    out.push({
-      day: m.day as Day,
-      name: m.name,
-      cuisine: m.cuisine,
-      calories: m.calories,
-      macros: {
-        protein_g: macros.protein_g,
-        carbs_g: macros.carbs_g,
-        fat_g: macros.fat_g,
-        fiber_g: macros.fiber_g,
-      },
-      health_notes: m.health_notes,
-      ingredients,
-      instructions: m.instructions,
-      youtube_query: m.youtube_query,
-    });
-  }
-  if (out.length !== 7) return null;
-  return out;
 }

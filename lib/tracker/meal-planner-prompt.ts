@@ -100,3 +100,89 @@ Return ONLY valid JSON. No markdown fences, no prose before or after. Schema:
 function labelOf(options: { id: string; label: string }[], id: string): string {
   return options.find((o) => o.id === id)?.label ?? id;
 }
+
+// ─── Swap (replace one day's meal) ─────────────────────────────────────────
+
+export function buildSwapPrompt(args: {
+  config: MealPlannerConfig;
+  recentHistory: MealPlan[];
+  weekStart: string;
+  weekEnd: string;
+  currentPlan: MealPlan;
+  dayToSwap: string;
+}): string {
+  const base = buildMealPlannerPrompt({
+    config: args.config,
+    recentHistory: args.recentHistory,
+    weekStart: args.weekStart,
+    weekEnd: args.weekEnd,
+  });
+  const otherMeals = args.currentPlan.meals
+    .filter((m) => m.day !== args.dayToSwap)
+    .map((m) => `  ${m.day}: ${m.name} (${m.cuisine})`)
+    .join("\n");
+  return `${base}
+
+CURRENT WEEK CONTEXT
+The user already has these meals planned for the same week. Don't repeat any of these names or near-duplicates:
+${otherMeals}
+
+REPLACE-ONE-DAY INSTRUCTION
+Generate ONE replacement meal for ${args.dayToSwap} only. Different from the dishes above. Same constraints (diet, allergies, cuisines, health notes).
+
+OUTPUT — return ONLY this JSON shape (no array, no fences, no prose):
+{
+  "meal": {
+    "day": "${args.dayToSwap}",
+    "name": "...",
+    "cuisine": "...",
+    "calories": 0,
+    "macros": { "protein_g": 0, "carbs_g": 0, "fat_g": 0, "fiber_g": 0 },
+    "health_notes": "...",
+    "ingredients": [ { "name": "...", "qty": "...", "unit": "..." } ],
+    "instructions": "...",
+    "youtube_query": "..."
+  }
+}`;
+}
+
+// ─── Regenerate (preserve locked, replace the rest) ────────────────────────
+
+export function buildRegeneratePrompt(args: {
+  config: MealPlannerConfig;
+  recentHistory: MealPlan[];
+  weekStart: string;
+  weekEnd: string;
+  currentPlan: MealPlan;
+  lockedDays: string[];
+}): string {
+  const base = buildMealPlannerPrompt({
+    config: args.config,
+    recentHistory: args.recentHistory,
+    weekStart: args.weekStart,
+    weekEnd: args.weekEnd,
+  });
+  const lockedMeals = args.currentPlan.meals
+    .filter((m) => args.lockedDays.includes(m.day))
+    .map(
+      (m) =>
+        `  ${m.day}: ${m.name} (${m.cuisine}) — KEEP THIS EXACTLY, copy through unchanged`,
+    )
+    .join("\n");
+  const daysToRegenerate = args.currentPlan.meals
+    .filter((m) => !args.lockedDays.includes(m.day))
+    .map((m) => m.day)
+    .join(", ");
+
+  return `${base}
+
+REGENERATE-WITH-LOCKS INSTRUCTION
+The user has locked these meals — copy them THROUGH UNCHANGED in your output (same name, same fields):
+${lockedMeals || "  (none)"}
+
+Generate fresh replacements for these days: ${daysToRegenerate || "(none)"}.
+Don't reuse the names of the locked meals or the previous unlocked meals.
+
+Return all 7 meals in the standard schema (with locked meals copied verbatim).`;
+}
+
