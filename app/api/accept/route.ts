@@ -128,7 +128,7 @@ export async function POST(req: Request) {
   const grocerySaturday = computeNextSaturday();
 
   const planUrl = `${PLAN_DEEP_LINK_BASE}/trackers/meal-planner/plan?week=${weekId}`;
-  const prepCheckinUrl = `${PLAN_DEEP_LINK_BASE}/trackers/meal-planner`;
+  const prepCheckinUrl = `${PLAN_DEEP_LINK_BASE}/trackers/meal-planner/prep?week=${weekId}`;
 
   const eventResults: { name: string; ok: boolean; htmlLink?: string; error?: string }[] = [];
 

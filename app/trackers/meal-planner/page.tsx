@@ -155,6 +155,22 @@ export default async function MealPlannerHomePage() {
         </div>
       </section>
 
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+          Prep check-in
+        </h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Sunday flow — mark the dinners you&apos;ve prepped and add
+          breakfast/lunch. We&apos;ll schedule them on your Calendar.
+        </p>
+        <Link
+          href="/trackers/meal-planner/prep"
+          className="mt-4 block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Open prep check-in →
+        </Link>
+      </section>
+
       <section className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
         <p className="font-medium text-slate-900">Phase 1 wrap-up</p>
         <p className="mt-2">
