@@ -52,38 +52,115 @@ npm run build       # production build
 
 ## Deploy to Vercel (free)
 
-1. Push this repo to GitHub.
-2. Go to [vercel.com/new](https://vercel.com/new), import `AWANSARI/atomicTracker`.
-3. Click **Deploy**. Default settings work.
-4. Once deployed, set environment variables in Vercel project settings (added in commit 2):
-   - `NEXTAUTH_SECRET` — `openssl rand -base64 32`
-   - `NEXTAUTH_URL` — `https://atomictracker.vercel.app` (or your Vercel-assigned URL)
-   - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+The deployed app is live at **https://atomictracker.vercel.app**.
+
+### First-time deploy
+
+1. Go to [vercel.com/new](https://vercel.com/new), import `AWANSARI/atomicTracker`.
+2. Click **Deploy** — defaults are fine, Vercel auto-detects Next.js.
+
+### Environment variables (required as of commit 2)
+
+In Vercel → Project → **Settings → Environment Variables**, add the four below for **Production, Preview, and Development**:
+
+| Variable | Value |
+|---|---|
+| `AUTH_SECRET` | run `openssl rand -base64 32` and paste the output |
+| `AUTH_GOOGLE_ID` | Google OAuth client ID — see below |
+| `AUTH_GOOGLE_SECRET` | Google OAuth client secret — see below |
+| `AUTH_URL` *(optional)* | `https://atomictracker.vercel.app` — only needed if Vercel doesn't auto-detect |
+
+After adding env vars, **redeploy** so they take effect (Deployments → "..." → Redeploy on the latest commit).
+
+## Google OAuth setup (~5 minutes)
+
+We need a Google OAuth client so users can sign in with their Google account and grant Drive + Calendar permissions.
+
+### 1. Create a Google Cloud project
+
+1. Open [console.cloud.google.com](https://console.cloud.google.com/) → top-bar project picker → **New Project**.
+2. Name it `AtomicTracker`. Create.
+
+### 2. Enable the APIs we'll call
+
+Open [APIs & Services → Library](https://console.cloud.google.com/apis/library) and enable:
+- **Google Drive API**
+- **Google Calendar API**
+- **YouTube Data API v3** (used in commit 5 for recipe links)
+
+### 3. Configure the OAuth consent screen
+
+1. [APIs & Services → OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent).
+2. User type: **External**. Create.
+3. Fill **App information**:
+   - App name: `AtomicTracker`
+   - User support email: your email
+   - Developer contact: your email
+4. **Scopes** step — click *Add or remove scopes* and select:
+   - `.../auth/userinfo.email`
+   - `.../auth/userinfo.profile`
+   - `openid`
+   - `.../auth/drive.file`
+   - `.../auth/calendar.events`
+5. **Test users** — add your own email (and any others who'll test) until the app is verified.
+6. Save.
+
+### 4. Create the OAuth client
+
+1. [APIs & Services → Credentials → Create Credentials → OAuth client ID](https://console.cloud.google.com/apis/credentials).
+2. Application type: **Web application**.
+3. Name: `AtomicTracker Web`.
+4. **Authorized redirect URIs** — add **both**:
+   - `https://atomictracker.vercel.app/api/auth/callback/google`
+   - `http://localhost:3000/api/auth/callback/google` *(for local dev)*
+5. Create.
+6. Copy the **Client ID** → paste as `AUTH_GOOGLE_ID` in Vercel.
+7. Copy the **Client secret** → paste as `AUTH_GOOGLE_SECRET` in Vercel.
+
+### 5. Redeploy
+
+Trigger a redeploy on Vercel (Deployments → "..." → Redeploy). Visit https://atomictracker.vercel.app — the Sign-in button should now actually sign you in.
+
+### Local development with the same OAuth client
+
+Create `.env.local` (gitignored) at the repo root:
+
+```bash
+cp .env.example .env.local
+# fill in AUTH_SECRET, AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET
+```
+
+Then `npm run dev` and open [localhost:3000](http://localhost:3000).
 
 ## Project structure
 
 ```
-app/                     ← Next.js App Router pages and routes
-  layout.tsx             ← root layout, PWA metadata
-  page.tsx               ← landing page
-  globals.css            ← Tailwind base
-public/                  ← static assets
-  manifest.json          ← PWA manifest
-  icon-*.svg             ← app icons
-PLAN.md                  ← full design plan and decisions log
+app/
+  layout.tsx                       ← root layout, PWA metadata
+  page.tsx                         ← landing — sign-in form action
+  globals.css                      ← Tailwind base
+  api/auth/[...nextauth]/route.ts  ← NextAuth handler
+  auth-error/page.tsx              ← OAuth error fallback
+  dashboard/
+    layout.tsx                     ← server-side auth guard
+    page.tsx                       ← logged-in landing
+auth.ts                            ← NextAuth v5 config (Google + JWT + refresh)
+types/next-auth.d.ts               ← module augmentation for token/session
+public/                            ← icons, manifest, generated service worker
+PLAN.md                            ← full design plan and decisions log
+.env.example                       ← required environment variables
 ```
 
 Future commits add:
 
 ```
-app/(auth)/              ← sign-in flow
-app/api/                 ← OAuth callbacks, dispatch endpoints
-app/dashboard/           ← tracker home, plan review, chat
-lib/drive/               ← Google Drive client
-lib/calendar/            ← Google Calendar client
-lib/ai/                  ← provider chooser (Claude / OpenAI / Gemini)
-lib/crypto/              ← WebCrypto encrypt/decrypt
-components/              ← shared UI primitives
+lib/google/drive.ts               ← Drive client + folder bootstrap (commit 3)
+lib/google/calendar.ts            ← Calendar client + recurring reminders (commit 5)
+lib/crypto/index.ts               ← WebCrypto AES-GCM encrypt/decrypt (commit 3)
+lib/ai/{anthropic,openai,gemini}.ts ← provider chooser (commit 4)
+app/onboarding/                   ← connector wizard (commit 4)
+app/tracker/meal-planner/         ← config wizard + plan review (commits 4–5)
+components/                       ← shared UI primitives
 ```
 
 ## License
