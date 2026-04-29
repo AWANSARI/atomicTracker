@@ -325,10 +325,13 @@ export async function uploadBinary(
   );
   const tail = enc.encode(`\r\n--${boundary}--`);
 
-  const body = new Uint8Array(head.length + buf.length + tail.length);
-  body.set(head, 0);
-  body.set(buf, head.length);
-  body.set(tail, head.length + buf.length);
+  // Build the body as a fresh ArrayBuffer so TS 5.9's strict BodyInit narrowing
+  // accepts it (Uint8Array<ArrayBufferLike> is rejected by lib.dom.d.ts).
+  const bodyBuf = new ArrayBuffer(head.length + buf.length + tail.length);
+  const bodyView = new Uint8Array(bodyBuf);
+  bodyView.set(head, 0);
+  bodyView.set(buf, head.length);
+  bodyView.set(tail, head.length + buf.length);
 
   const res = await fetch(
     `${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,webViewLink,webContentLink`,
@@ -338,7 +341,7 @@ export async function uploadBinary(
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": `multipart/related; boundary=${boundary}`,
       },
-      body: new Blob([body]),
+      body: bodyBuf,
     },
   );
   if (!res.ok) {

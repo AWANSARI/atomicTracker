@@ -81,10 +81,14 @@ export async function POST(req: Request) {
     );
   }
 
-  // Build the XLSX workbook.
-  let xlsxBytes: Uint8Array;
+  // Build the XLSX workbook. JSZip returns Uint8Array<ArrayBufferLike> which
+  // TS 5.9's strict BlobPart narrowing rejects — copy into a fresh ArrayBuffer
+  // and pass that (ArrayBuffer is always a valid BlobPart).
+  let xlsxBuf: ArrayBuffer;
   try {
-    xlsxBytes = await buildYearlyArchiveXlsx(plans);
+    const raw = await buildYearlyArchiveXlsx(plans);
+    xlsxBuf = new ArrayBuffer(raw.byteLength);
+    new Uint8Array(xlsxBuf).set(raw);
   } catch (e) {
     return NextResponse.json(
       { error: `XLSX generation failed: ${e instanceof Error ? e.message : String(e)}` },
@@ -116,7 +120,7 @@ export async function POST(req: Request) {
             Authorization: `Bearer ${session.accessToken}`,
             "Content-Type": XLSX_MIME,
           },
-          body: new Blob([xlsxBytes], { type: XLSX_MIME }),
+          body: xlsxBuf,
         },
       );
       if (!res.ok) {
@@ -133,7 +137,7 @@ export async function POST(req: Request) {
         session.accessToken,
         archiveFolderId,
         archiveName,
-        xlsxBytes,
+        xlsxBuf,
         XLSX_MIME,
       );
       driveFileId = result.id;
