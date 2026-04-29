@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Dumbbell, UtensilsCrossed, Wallet } from "lucide-react";
 import { hasMealPlannerConfig } from "./meal-planner/actions";
 import { AppShell } from "@/components/AppShell";
 
@@ -18,7 +19,7 @@ export default async function TrackersPage() {
               ? "/trackers/meal-planner"
               : "/trackers/meal-planner/setup"
           }
-          icon="🍽️"
+          Icon={UtensilsCrossed}
           title="Weekly Meal Planner"
           description={
             mealPlannerConfigured
@@ -29,14 +30,14 @@ export default async function TrackersPage() {
         />
 
         <TrackerCard
-          icon="🏋️"
+          Icon={Dumbbell}
           title="Workout Planner"
           description="Coming after Phase 1."
           status="coming-soon"
         />
 
         <TrackerCard
-          icon="💰"
+          Icon={Wallet}
           title="Finance Tracker"
           description="Coming after Phase 1."
           status="coming-soon"
@@ -53,13 +54,13 @@ export default async function TrackersPage() {
 
 function TrackerCard({
   href,
-  icon,
+  Icon,
   title,
   description,
   status,
 }: {
   href?: string;
-  icon: string;
+  Icon: React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
   status: "configured" | "available" | "coming-soon";
@@ -68,32 +69,32 @@ function TrackerCard({
     <div className="flex items-start gap-3">
       <div
         aria-hidden
-        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-xl"
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
       >
-        {icon}
+        <Icon className="h-5 w-5" />
       </div>
-      <div className="flex-1">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-900">{title}</p>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">{title}</p>
           {status === "configured" ? (
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-800">
-              ✓ Active
+            <span className="shrink-0 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+              Active
             </span>
           ) : null}
           {status === "coming-soon" ? (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+            <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
               Soon
             </span>
           ) : null}
         </div>
-        <p className="mt-1 text-xs text-slate-500">{description}</p>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{description}</p>
       </div>
     </div>
   );
 
   if (status === "coming-soon") {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 opacity-70 dark:border-slate-800 dark:bg-slate-900">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 opacity-60 dark:border-slate-800 dark:bg-slate-900">
         {inner}
       </div>
     );
@@ -101,7 +102,7 @@ function TrackerCard({
   return (
     <Link
       href={href ?? "#"}
-      className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-300 hover:bg-brand-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-brand-600 dark:hover:bg-slate-800"
+      className="block rounded-xl border border-slate-200 bg-white p-4 transition hover:border-brand-400 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-brand-600 dark:hover:bg-slate-800"
     >
       {inner}
     </Link>

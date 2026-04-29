@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { UtensilsCrossed } from "lucide-react";
 import { auth, signOut } from "@/auth";
 import { findFile, readAtomicTrackerLayout } from "@/lib/google/drive";
 import { bootstrapDriveFolder } from "./actions";
@@ -117,19 +118,19 @@ export default async function DashboardPage() {
           >
             <button
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
             >
               Set up my Drive folder
             </button>
-            <p className="mt-2 text-center text-[11px] text-slate-400">
+            <p className="mt-2 text-center text-[11px] text-slate-400 dark:text-slate-500">
               Creates /AtomicTracker/ with subfolders for config, history,
               grocery, archive, and exports. ~1-2s on first run.
             </p>
           </form>
         ) : (
-          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+          <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
             <p className="font-medium">Drive folder ready.</p>
-            <p className="mt-1 text-emerald-800">
+            <p className="mt-1">
               Open in{" "}
               <a
                 href={`https://drive.google.com/drive/folders/${layout!.rootId}`}
@@ -154,33 +155,33 @@ export default async function DashboardPage() {
               ? "/trackers/meal-planner"
               : "/trackers"
           }
-          className="mt-3 flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-300 hover:bg-brand-50"
+          className="mt-3 flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-brand-400 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-brand-600 dark:hover:bg-slate-800"
         >
           <div
             aria-hidden
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-xl"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
           >
-            🍽️
+            <UtensilsCrossed className="h-5 w-5" />
           </div>
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-900">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">
                 Weekly Meal Planner
               </p>
               {mealPlannerConfigured ? (
-                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-800">
-                  ✓ Active
+                <span className="shrink-0 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  Active
                 </span>
               ) : (
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-900">
+                <span className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
                   Set up
                 </span>
               )}
             </div>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               {mealPlannerConfigured
                 ? "Tap to view config and generate next week"
-                : "8-step wizard: diet, health, allergies, cuisines, ingredients, frequency, mealtimes"}
+                : "10-step wizard: diet, health, allergies, cuisines, ingredients, frequency, cheat day, mealtimes"}
             </p>
           </div>
         </Link>
@@ -218,11 +219,11 @@ function ConnectionRow({
   const styles = {
     connected: { bg: "bg-emerald-500", glyph: "✓" },
     pending: { bg: "bg-amber-500", glyph: "…" },
-    "not-connected": { bg: "bg-slate-300", glyph: "—" },
+    "not-connected": { bg: "bg-slate-300 dark:bg-slate-700", glyph: "—" },
   } as const;
   const s = styles[status];
   return (
-    <li className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3">
+    <li className="flex items-start gap-3 rounded-md border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
       <span
         className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ${s.bg}`}
         aria-hidden
@@ -230,8 +231,8 @@ function ConnectionRow({
         {s.glyph}
       </span>
       <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-900">{label}</p>
-        {note ? <p className="mt-0.5 text-xs text-slate-500">{note}</p> : null}
+        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{label}</p>
+        {note ? <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{note}</p> : null}
       </div>
     </li>
   );
