@@ -18,7 +18,7 @@ import {
   type MealPlannerConfig,
 } from "@/lib/tracker/meal-planner-types";
 
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 const STEP_LABELS = [
   "Diet",
   "Health",
@@ -28,10 +28,11 @@ const STEP_LABELS = [
   "Repeats",
   "Cook freq",
   "Cheat day",
+  "Schedule",
   "Times",
   "Review",
 ];
-const LAST_STEP: Step = 9;
+const LAST_STEP: Step = 10;
 
 export function MealPlannerWizard({
   initialConfig,
@@ -196,6 +197,17 @@ export function MealPlannerWizard({
       ) : null}
 
       {step === 8 ? (
+        <ScheduleStep
+          cookingDays={config.cookingDays}
+          shoppingDay={config.shoppingDay}
+          shoppingTime={config.shoppingTime}
+          onCookingDaysChange={(v) => update("cookingDays", v)}
+          onShoppingDayChange={(v) => update("shoppingDay", v)}
+          onShoppingTimeChange={(v) => update("shoppingTime", v)}
+        />
+      ) : null}
+
+      {step === 9 ? (
         <MealtimesStep
           value={config.mealtimes}
           onChange={(mt) => update("mealtimes", mt)}
@@ -206,7 +218,7 @@ export function MealPlannerWizard({
         />
       ) : null}
 
-      {step === 9 ? (
+      {step === 10 ? (
         <ReviewStep config={config} suggested={suggestedIngredients.length} />
       ) : null}
 
@@ -604,6 +616,93 @@ function CheatDayStep({
   );
 }
 
+function ScheduleStep({
+  cookingDays,
+  shoppingDay,
+  shoppingTime,
+  onCookingDaysChange,
+  onShoppingDayChange,
+  onShoppingTimeChange,
+}: {
+  cookingDays: MealPlannerConfig["cookingDays"];
+  shoppingDay: MealPlannerConfig["shoppingDay"];
+  shoppingTime: string;
+  onCookingDaysChange: (v: MealPlannerConfig["cookingDays"]) => void;
+  onShoppingDayChange: (v: MealPlannerConfig["shoppingDay"]) => void;
+  onShoppingTimeChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <Heading
+        title="Cooking & shopping days"
+        hint="When you typically batch-cook, and the day you shop. Drives the recurring Calendar reminders."
+      />
+      <div>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Cooking days (multi-select)
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {DAYS_OF_WEEK.map((d) => {
+            const on = cookingDays.includes(d.id as MealPlannerConfig["cookingDays"][number]);
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => {
+                  const id = d.id as MealPlannerConfig["cookingDays"][number];
+                  onCookingDaysChange(
+                    on
+                      ? cookingDays.filter((x) => x !== id)
+                      : [...cookingDays, id],
+                  );
+                }}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  on
+                    ? "border-brand-600 bg-brand-600 text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                }`}
+              >
+                {d.label.slice(0, 3)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Shopping day (single)
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {DAYS_OF_WEEK.map((d) => {
+            const on = shoppingDay === d.id;
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() =>
+                  onShoppingDayChange(d.id as MealPlannerConfig["shoppingDay"])
+                }
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  on
+                    ? "border-brand-600 bg-brand-600 text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                }`}
+              >
+                {d.label.slice(0, 3)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <TimeRow
+        label="Shopping reminder at"
+        value={shoppingTime}
+        onChange={onShoppingTimeChange}
+      />
+    </div>
+  );
+}
+
 function MealtimesStep({
   value,
   onChange,
@@ -707,6 +806,14 @@ function ReviewStep({
         }
       />
       <ReviewRow label="Cheat day" value={dayLabel(config.cheatDay)} />
+      <ReviewRow
+        label="Cooking days"
+        value={config.cookingDays.length ? config.cookingDays.join(", ") : "—"}
+      />
+      <ReviewRow
+        label="Shopping"
+        value={`${config.shoppingDay} at ${config.shoppingTime}`}
+      />
       <ReviewRow
         label="Mealtimes"
         value={`B ${config.mealtimes.breakfast} · L ${config.mealtimes.lunch} · D ${config.mealtimes.dinner}`}

@@ -19,6 +19,7 @@ import {
 import { readMealPlannerConfig } from "./actions";
 import { AppShell } from "@/components/AppShell";
 import { WeekCard } from "@/components/WeekCard";
+import { RemindersClient } from "./RemindersClient";
 
 const APP_VERSION = "0.1.0";
 
@@ -164,6 +165,22 @@ export default async function MealPlannerHomePage() {
             value={`${config.mealtimes.breakfast} · ${config.mealtimes.lunch} · ${config.mealtimes.dinner}`}
           />
         </dl>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Recurring reminders
+        </h2>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          {config.reminderEventIds?.fridayPlan
+            ? "Friday plan + Sunday prep + weekly shopping reminders are set up. Refresh to apply changes after editing your config."
+            : "One-time setup: creates Friday 6pm plan reminder, Sunday 6pm prep check-in, and a weekly shopping reminder on your shopping day."}
+        </p>
+        <div className="mt-3">
+          <RemindersClient
+            hasReminders={Boolean(config.reminderEventIds?.fridayPlan)}
+          />
+        </div>
       </section>
 
       <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">

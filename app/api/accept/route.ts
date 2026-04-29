@@ -198,11 +198,7 @@ export async function POST(req: Request) {
   }
 
   // 3. Create Calendar events
-  // Use this Saturday (i.e. Saturday in the upcoming or current week) as the grocery shopping day.
-  const grocerySaturday = computeNextSaturday();
-
-  const planUrl = `${PLAN_DEEP_LINK_BASE}/trackers/meal-planner/plan?week=${weekId}`;
-  const prepCheckinUrl = `${PLAN_DEEP_LINK_BASE}/trackers/meal-planner/prep?week=${weekId}`;
+  // (Admin events moved to /api/setup-reminders; locals removed.)
 
   const eventResults: { name: string; ok: boolean; htmlLink?: string; error?: string }[] = [];
   const newAdminEventIds: string[] = [];
@@ -256,85 +252,71 @@ export async function POST(req: Request) {
     }
   }
 
-  // ---- Admin events (only on full accept) ----
-  if (partial) {
-    // Skip admin event creation; preserve existing IDs in acceptedPlan.calendarEventIds
-  } else {
-  try {
-    const ev1 = await createEvent(session.accessToken, {
-      summary: "AtomicTracker · Plan next week's meals",
-      description: `Tap to generate next week's meal plan.\n\n${planUrl}`,
-      source: { title: "AtomicTracker", url: planUrl },
-      start: localDateTime(grocerySaturday, "18:00", timezone),
-      end: localDateTime(grocerySaturday, "18:30", timezone),
-      recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=FR"],
-      reminders: {
-        useDefault: false,
-        overrides: [{ method: "popup", minutes: 0 }],
-      },
-    });
-    newAdminEventIds.push(ev1.id);
-    eventResults.push({ name: "Friday plan reminder", ok: true, htmlLink: ev1.htmlLink });
-  } catch (e) {
-    eventResults.push({
-      name: "Friday plan reminder",
-      ok: false,
-      error: e instanceof Error ? e.message : String(e),
-    });
+  // ---- Per-day breakfast + lunch events (Mon-Fri) using config defaults ----
+  // Only on full accept (partial re-accept doesn't touch B/L).
+  if (!partial && config) {
+    const WEEKDAYS: Day[] = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    if (config.defaultBreakfast) {
+      for (const day of WEEKDAYS) {
+        if (config.cheatDay === day) continue;
+        const dayDate = new Date(weekStartDate);
+        dayDate.setUTCDate(weekStartDate.getUTCDate() + DAY_OFFSETS[day]);
+        try {
+          const ev = await createEvent(session.accessToken, {
+            summary: `🥣 ${config.defaultBreakfast}`,
+            description: "Breakfast — scheduled by AtomicTracker accept.",
+            start: localDateTime(dayDate, config.mealtimes.breakfast, timezone),
+            end: localDateTime(
+              dayDate,
+              addMinutes(config.mealtimes.breakfast, 30),
+              timezone,
+            ),
+            reminders: { useDefault: false },
+          });
+          newAdminEventIds.push(ev.id);
+          eventResults.push({ name: `${day} · breakfast`, ok: true, htmlLink: ev.htmlLink });
+        } catch (e) {
+          eventResults.push({
+            name: `${day} · breakfast`,
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+    }
+    if (config.defaultLunch) {
+      for (const day of WEEKDAYS) {
+        if (config.cheatDay === day) continue;
+        const dayDate = new Date(weekStartDate);
+        dayDate.setUTCDate(weekStartDate.getUTCDate() + DAY_OFFSETS[day]);
+        try {
+          const ev = await createEvent(session.accessToken, {
+            summary: `🥗 ${config.defaultLunch}`,
+            description: "Lunch — scheduled by AtomicTracker accept.",
+            start: localDateTime(dayDate, config.mealtimes.lunch, timezone),
+            end: localDateTime(
+              dayDate,
+              addMinutes(config.mealtimes.lunch, 30),
+              timezone,
+            ),
+            reminders: { useDefault: false },
+          });
+          newAdminEventIds.push(ev.id);
+          eventResults.push({ name: `${day} · lunch`, ok: true, htmlLink: ev.htmlLink });
+        } catch (e) {
+          eventResults.push({
+            name: `${day} · lunch`,
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+    }
   }
 
-  try {
-    const ev2 = await createEvent(session.accessToken, {
-      summary: "AtomicTracker · What did you prep this week?",
-      description: `Tap to mark what you cooked and add breakfast/lunch/dinner to your Calendar.\n\n${prepCheckinUrl}`,
-      source: { title: "AtomicTracker", url: prepCheckinUrl },
-      start: localDateTime(grocerySaturday, "18:00", timezone),
-      end: localDateTime(grocerySaturday, "18:30", timezone),
-      recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=SU"],
-      reminders: {
-        useDefault: false,
-        overrides: [{ method: "popup", minutes: 0 }],
-      },
-    });
-    newAdminEventIds.push(ev2.id);
-    eventResults.push({ name: "Sunday prep check-in", ok: true, htmlLink: ev2.htmlLink });
-  } catch (e) {
-    eventResults.push({
-      name: "Sunday prep check-in",
-      ok: false,
-      error: e instanceof Error ? e.message : String(e),
-    });
-  }
-
-  try {
-    const groceryDescription =
-      `Grocery list for week ${weekId} (${plan.weekStart} → ${plan.weekEnd}):\n\n` +
-      rows.map((r) => `• ${r.qty} ${r.unit} ${r.item}`).join("\n") +
-      `\n\nFull CSV in your Drive at /AtomicTracker/grocery/${weekId}-list.csv`;
-    const ev3 = await createEvent(session.accessToken, {
-      summary: `AtomicTracker · Grocery shopping for week of ${plan.weekStart}`,
-      description: groceryDescription,
-      source: {
-        title: "AtomicTracker grocery list",
-        url: `https://drive.google.com/file/d/${csvFileId}/view`,
-      },
-      start: localDateTime(grocerySaturday, "10:00", timezone),
-      end: localDateTime(grocerySaturday, "11:30", timezone),
-      reminders: {
-        useDefault: false,
-        overrides: [{ method: "popup", minutes: 60 }],
-      },
-    });
-    newAdminEventIds.push(ev3.id);
-    eventResults.push({ name: "Grocery shopping", ok: true, htmlLink: ev3.htmlLink });
-  } catch (e) {
-    eventResults.push({
-      name: "Grocery shopping",
-      ok: false,
-      error: e instanceof Error ? e.message : String(e),
-    });
-  }
-  } // end of !partial admin events block
+  // Admin events (Friday plan / Sunday prep / weekly shopping) are now
+  // created once via /api/setup-reminders and stored on the user's config
+  // (NOT on each plan). This avoids the duplicate-events-per-week bug.
 
   // Persist the new event IDs back into the accepted plan.
   if (!partial) {
@@ -381,13 +363,3 @@ export async function POST(req: Request) {
   });
 }
 
-/** Saturday on or after today (UTC). Used for the grocery-shopping event start. */
-function computeNextSaturday(): Date {
-  const now = new Date();
-  const day = now.getUTCDay(); // 0=Sun..6=Sat
-  const daysUntilSat = day <= 6 ? (6 - day) : 0;
-  const sat = new Date(now);
-  sat.setUTCDate(now.getUTCDate() + daysUntilSat);
-  sat.setUTCHours(0, 0, 0, 0);
-  return sat;
-}

@@ -34,31 +34,81 @@ const CATEGORY_ORDER: Record<string, number> = {
 };
 
 /**
- * Build a grocery list from a meal plan. One row per (day, ingredient),
- * sorted by aisle category for grouped shopping.
+ * Aggregate ingredients across all meals into one row per (item, unit).
+ * Quantities are summed when parsable; non-numeric quantities are
+ * concatenated. The day_added column lists every day the ingredient was
+ * referenced. Sorted by category (supermarket walk order) then item.
  */
 export function buildGroceryRows(plan: MealPlan): GroceryRow[] {
-  const rows: GroceryRow[] = [];
+  type Bucket = {
+    item: string;
+    unit: string;
+    category: string;
+    days: string[];
+    numericTotal: number;
+    nonNumeric: string[];
+    walmart_url: string;
+    amazon_url: string;
+    doordash_url: string;
+    recipeLinks: Set<string>;
+  };
+  const buckets = new Map<string, Bucket>();
+
+  function key(name: string, unit: string): string {
+    return `${name.toLowerCase().trim()}::${unit.toLowerCase().trim()}`;
+  }
+
   for (const meal of plan.meals) {
     const recipe = meal.recipe_video?.url ?? meal.recipe_url ?? "";
     for (const ing of meal.ingredients) {
-      rows.push({
-        week: plan.weekId,
-        day_added: meal.day,
-        item: ing.name,
-        qty: ing.qty,
-        unit: ing.unit,
-        category: ing.category ?? "other",
-        walmart_url: walmartSearch(ing.name),
-        amazon_url: amazonSearch(ing.name),
-        doordash_url: doordashSearch(ing.name),
-        recipe_link: recipe,
-        status: "",
-        purchased_at: "",
-      });
+      const k = key(ing.name, ing.unit);
+      let bucket = buckets.get(k);
+      if (!bucket) {
+        bucket = {
+          item: ing.name,
+          unit: ing.unit,
+          category: ing.category ?? "other",
+          days: [],
+          numericTotal: 0,
+          nonNumeric: [],
+          walmart_url: walmartSearch(ing.name),
+          amazon_url: amazonSearch(ing.name),
+          doordash_url: doordashSearch(ing.name),
+          recipeLinks: new Set(),
+        };
+        buckets.set(k, bucket);
+      }
+      if (!bucket.days.includes(meal.day)) bucket.days.push(meal.day);
+      const num = parseQty(ing.qty);
+      if (num !== null) {
+        bucket.numericTotal += num;
+      } else if (ing.qty.trim()) {
+        bucket.nonNumeric.push(ing.qty.trim());
+      }
+      if (recipe) bucket.recipeLinks.add(recipe);
     }
   }
-  // Sort: category order, then item name (case-insensitive)
+
+  const rows: GroceryRow[] = [];
+  for (const b of buckets.values()) {
+    const numericPart = b.numericTotal > 0 ? formatNumber(b.numericTotal) : "";
+    const qtyParts = [numericPart, ...b.nonNumeric].filter(Boolean);
+    const qty = qtyParts.length ? qtyParts.join(" + ") : "to taste";
+    rows.push({
+      week: plan.weekId,
+      day_added: b.days.join(", "),
+      item: b.item,
+      qty,
+      unit: b.unit,
+      category: b.category,
+      walmart_url: b.walmart_url,
+      amazon_url: b.amazon_url,
+      doordash_url: b.doordash_url,
+      recipe_link: Array.from(b.recipeLinks).join(" | "),
+      status: "",
+      purchased_at: "",
+    });
+  }
   rows.sort((a, b) => {
     const ca = CATEGORY_ORDER[a.category] ?? 9;
     const cb = CATEGORY_ORDER[b.category] ?? 9;
@@ -66,6 +116,39 @@ export function buildGroceryRows(plan: MealPlan): GroceryRow[] {
     return a.item.toLowerCase().localeCompare(b.item.toLowerCase());
   });
   return rows;
+}
+
+/** Parse "200", "1/2", "1.5", "2-3" -> first number. Returns null if not numeric. */
+function parseQty(qty: string): number | null {
+  const trimmed = qty.trim();
+  if (!trimmed) return null;
+  // Fraction like "1/2"
+  const frac = /^(\d+)\s*\/\s*(\d+)$/.exec(trimmed);
+  if (frac) {
+    const a = parseInt(frac[1]!, 10);
+    const b = parseInt(frac[2]!, 10);
+    if (b > 0) return a / b;
+  }
+  // Mixed number "1 1/2"
+  const mixed = /^(\d+)\s+(\d+)\s*\/\s*(\d+)$/.exec(trimmed);
+  if (mixed) {
+    const w = parseInt(mixed[1]!, 10);
+    const a = parseInt(mixed[2]!, 10);
+    const b = parseInt(mixed[3]!, 10);
+    if (b > 0) return w + a / b;
+  }
+  // Range "2-3" -> take first number
+  const range = /^(\d+(?:\.\d+)?)\s*-\s*\d+(?:\.\d+)?$/.exec(trimmed);
+  if (range) return parseFloat(range[1]!);
+  // Plain number "200" or "1.5"
+  const num = parseFloat(trimmed);
+  if (!isNaN(num) && /^[\d.]+$/.test(trimmed.replace(/\s/g, ""))) return num;
+  return null;
+}
+
+function formatNumber(n: number): string {
+  if (Number.isInteger(n)) return String(n);
+  return n.toFixed(2).replace(/\.?0+$/, "");
 }
 
 /** RFC 4180 CSV with header row. */

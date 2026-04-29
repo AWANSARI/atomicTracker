@@ -54,6 +54,25 @@ export type MealPlannerConfig = {
   defaultBreakfast?: string;
   defaultLunch?: string;
 
+  /** Days of the week the user actually cooks (drives optional cooking events). */
+  cookingDays: ("Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun")[];
+
+  /** Single day for the recurring grocery-shopping reminder. */
+  shoppingDay: "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
+
+  /** Time for the shopping reminder (HH:MM, user's local tz). */
+  shoppingTime: string;
+
+  /**
+   * Recurring Calendar event IDs created once at config setup, so we don't
+   * duplicate them on every plan accept.
+   */
+  reminderEventIds?: {
+    fridayPlan?: string;
+    sundayPrep?: string;
+    weeklyShopping?: string;
+  };
+
   /** Populated as user marks favorites; empty on first save. */
   favoriteMeals: string[];
   favoriteIngredients: string[];
@@ -77,6 +96,9 @@ export function emptyMealPlannerConfig(): MealPlannerConfig {
     repeatsPerWeek: 2,
     cookingFrequency: "daily",
     cheatDay: null,
+    cookingDays: ["Sun"],
+    shoppingDay: "Sat",
+    shoppingTime: "10:00",
     mealtimes: {
       breakfast: "08:00",
       lunch: "12:30",
