@@ -143,12 +143,12 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
   // ─── Render ────────────────────────────────────────────────────────────
 
   if (!loaded) {
-    return <p className="text-sm text-slate-400">Loading…</p>;
+    return <p className="text-sm text-slate-400 dark:text-slate-500">Loading…</p>;
   }
 
   if (loaded.kind === "no-passphrase") {
     return (
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         Set your encryption passphrase above first.
       </p>
     );
@@ -159,34 +159,33 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
     const info = PROVIDERS[loaded.payload.ai.provider];
     return (
       <div className="space-y-3">
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-          <span aria-hidden className="text-emerald-600">✓</span>
-          <span>
-            <span className="font-medium">{info.name}</span> connected. Key
-            encrypted with your passphrase and stored at{" "}
-            <code className="rounded bg-emerald-100 px-1 py-0.5 text-[11px]">
-              /AtomicTracker/config/connectors.enc.json
-            </code>
-            .
-          </span>
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+          <span className="font-medium">{info.name}</span> connected. Key
+          encrypted with your passphrase and stored at{" "}
+          <code className="rounded bg-emerald-100 px-1 py-0.5 text-[11px] dark:bg-emerald-900/50">
+            /AtomicTracker/config/connectors.enc.json
+          </code>
+          .
         </div>
         <div className="flex gap-2 text-xs">
           <button
             type="button"
             onClick={startWizard}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             Replace
           </button>
           <button
             type="button"
             onClick={onRemove}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             Remove
           </button>
         </div>
-        {error ? <p className="text-xs text-red-600">{error}</p> : null}
+        {error ? (
+          <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+        ) : null}
       </div>
     );
   }
@@ -194,15 +193,19 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
   if (step === "idle") {
     return (
       <div className="space-y-3">
-        <p className="text-sm text-slate-500">No AI provider connected yet.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          No AI provider connected yet.
+        </p>
         <button
           type="button"
           onClick={startWizard}
-          className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
+          className="w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
         >
           Add AI provider
         </button>
-        {error ? <p className="text-xs text-red-600">{error}</p> : null}
+        {error ? (
+          <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+        ) : null}
       </div>
     );
   }
@@ -238,19 +241,21 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
                   setProvider(id);
                   setStep("get-key");
                 }}
-                className="w-full rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-brand-300 hover:bg-brand-50"
+                className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-brand-400 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-brand-600 dark:hover:bg-slate-800"
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-slate-900">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
                     {info.name}
                   </span>
                   {info.freeTier ? (
-                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-800">
+                    <span className="shrink-0 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
                       Free tier
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-1 text-xs text-slate-500">{info.tagline}</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {info.tagline}
+                </p>
               </button>
             );
           })}
@@ -259,10 +264,10 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
 
       {step === "get-key" && provider ? (
         <div className="space-y-3">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Steps to get your {PROVIDERS[provider].shortName} API key:
           </p>
-          <ol className="ml-4 list-decimal space-y-1 text-sm text-slate-700">
+          <ol className="ml-4 list-decimal space-y-1 text-sm text-slate-700 dark:text-slate-300">
             {PROVIDERS[provider].steps.map((s, i) => (
               <li key={i}>{s}</li>
             ))}
@@ -271,7 +276,7 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
             href={PROVIDERS[provider].consoleUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100"
+            className="inline-flex items-center gap-1 rounded-md border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100 dark:border-brand-800 dark:bg-brand-950/40 dark:text-brand-300 dark:hover:bg-brand-900/40"
           >
             Open {PROVIDERS[provider].consoleHost} ↗
           </a>
@@ -279,14 +284,14 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
             <button
               type="button"
               onClick={() => setStep("paste-test")}
-              className="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
+              className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
             >
               I have my key
             </button>
             <button
               type="button"
               onClick={cancelWizard}
-              className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
             >
               Cancel
             </button>
@@ -297,7 +302,7 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
       {step === "paste-test" && provider ? (
         <div className="space-y-3">
           <label className="block">
-            <span className="text-xs font-medium text-slate-700">
+            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
               {PROVIDERS[provider].shortName} API key
             </span>
             <input
@@ -311,21 +316,21 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
                 setTestStatus("untested");
               }}
               placeholder={PROVIDERS[provider].keyPlaceholder}
-              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500"
+              className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm focus:border-brand-500 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
           </label>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">
             We&apos;ll test it against {PROVIDERS[provider].consoleHost} once,
             then encrypt and store it in your Drive.
           </p>
 
           {testStatus === "ok" ? (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
-              ✓ Key works. Save to encrypt and store on your Drive.
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+              Key works. Save to encrypt and store on your Drive.
             </div>
           ) : null}
           {testStatus === "fail" && error ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-900">
+            <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
               {error}
             </div>
           ) : null}
@@ -336,7 +341,7 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
                 type="button"
                 onClick={onTest}
                 disabled={!apiKey || testStatus === "testing"}
-                className="flex-1 rounded-xl border border-brand-300 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 {testStatus === "testing" ? "Testing…" : "Test key"}
               </button>
@@ -345,7 +350,7 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
                 type="button"
                 onClick={onSave}
                 disabled={(step as Step) === "saving"}
-                className="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
+                className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-60"
               >
                 {(step as Step) === "saving" ? "Saving…" : "Encrypt & save"}
               </button>
@@ -353,7 +358,7 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
             <button
               type="button"
               onClick={cancelWizard}
-              className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
             >
               Cancel
             </button>
@@ -362,8 +367,8 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
       ) : null}
 
       {step === "done" ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-          ✓ Saved. AI provider is connected.
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+          Saved. AI provider is connected.
         </div>
       ) : null}
     </div>
@@ -386,17 +391,26 @@ function Stepper({
             className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
               i <= idx
                 ? "bg-brand-600 text-white"
-                : "bg-slate-200 text-slate-500"
+                : "bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
             }`}
             aria-hidden
           >
             {i + 1}
           </span>
-          <span className={i <= idx ? "text-slate-900" : "text-slate-400"}>
+          <span
+            className={
+              i <= idx
+                ? "text-slate-900 dark:text-slate-100"
+                : "text-slate-400 dark:text-slate-500"
+            }
+          >
             {s.label}
           </span>
           {i < steps.length - 1 ? (
-            <span className="ml-1 h-px flex-1 bg-slate-200" aria-hidden />
+            <span
+              className="ml-1 h-px flex-1 bg-slate-200 dark:bg-slate-800"
+              aria-hidden
+            />
           ) : null}
         </li>
       ))}

@@ -259,12 +259,12 @@ function Stepper({ step }: { step: number }) {
       {STEP_LABELS.map((label, i) => (
         <div
           key={label}
-          className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+          className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
             i === step
               ? "bg-brand-600 text-white"
               : i < step
-                ? "bg-emerald-100 text-emerald-800"
-                : "bg-slate-100 text-slate-500"
+                ? "border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-400"
+                : "border border-slate-200 bg-white text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-500"
           }`}
         >
           <span>{i < step ? "✓" : i + 1}</span>
@@ -425,7 +425,7 @@ function IngredientsStep({
         hint={`Suggested by your selected cuisines. Tap to include in the AI's pantry.`}
       />
       {suggested.length === 0 ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+        <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           No suggestions — add at least one cuisine on the previous step.
         </p>
       ) : (
@@ -437,10 +437,10 @@ function IngredientsStep({
                 key={name}
                 type="button"
                 onClick={() => onToggle(name)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                   on
-                    ? "bg-brand-600 text-white"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    ? "border-brand-600 bg-brand-600 text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                 }`}
               >
                 {name}
@@ -449,7 +449,7 @@ function IngredientsStep({
           })}
         </div>
       )}
-      <p className="mt-2 text-[11px] text-slate-500">
+      <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
         Custom ingredients (always included):
       </p>
       <CustomList
@@ -475,10 +475,10 @@ function FrequencyStep({
         title="Repeat frequency"
         hint="How many times in a week is it OK to see the same dish?"
       />
-      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <div className="text-center">
-          <span className="text-5xl font-bold text-brand-600">{value}</span>
-          <span className="ml-1 text-sm text-slate-500">/ 7 days</span>
+          <span className="text-5xl font-bold text-brand-600 dark:text-brand-400">{value}</span>
+          <span className="ml-1 text-sm text-slate-500 dark:text-slate-400">/ 7 days</span>
         </div>
         <input
           type="range"
@@ -489,7 +489,7 @@ function FrequencyStep({
           onChange={(e) => onChange(parseInt(e.target.value, 10))}
           className="mt-4 w-full accent-brand-600"
         />
-        <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+        <div className="mt-1 flex justify-between text-[10px] text-slate-400 dark:text-slate-500">
           <span>1</span>
           <span>2</span>
           <span>3</span>
@@ -572,10 +572,10 @@ function CheatDayStep({
         <button
           type="button"
           onClick={() => onChange(null)}
-          className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
             value === null
-              ? "bg-brand-600 text-white"
-              : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              ? "border-brand-600 bg-brand-600 text-white"
+              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
           }`}
         >
           No cheat day
@@ -589,10 +589,10 @@ function CheatDayStep({
               onClick={() =>
                 onChange(d.id as MealPlannerConfig["cheatDay"])
               }
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                 on
-                  ? "bg-brand-600 text-white"
-                  : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                  ? "border-brand-600 bg-brand-600 text-white"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
               }`}
             >
               {d.label}
@@ -728,8 +728,12 @@ function ReviewStep({
 function Heading({ title, hint }: { title: string; hint?: string }) {
   return (
     <div>
-      <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+      <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50">
+        {title}
+      </h2>
+      {hint ? (
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -752,10 +756,10 @@ function Chips({
             key={o.id}
             type="button"
             onClick={() => onToggle(o.id)}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
               on
-                ? "bg-brand-600 text-white"
-                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                ? "border-brand-600 bg-brand-600 text-white"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
             }`}
           >
             {o.label}
@@ -781,7 +785,7 @@ function CustomInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500"
+      className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
     />
   );
 }
@@ -822,12 +826,12 @@ function CustomList({
             }
           }}
           placeholder={placeholder}
-          className="block flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500"
+          className="block flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
         />
         <button
           type="button"
           onClick={commit}
-          className="rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-100"
+          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
         >
           Add
         </button>
@@ -866,13 +870,15 @@ function TimeRow({
   onChange: (v: string) => void;
 }) {
   return (
-    <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3">
-      <span className="text-sm font-medium text-slate-900">{label}</span>
+    <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+      <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
+        {label}
+      </span>
       <input
         type="time"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-slate-300 px-2 py-1 text-sm focus:border-brand-500 focus:ring-brand-500"
+        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm focus:border-brand-500 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:[color-scheme:dark]"
       />
     </label>
   );
@@ -880,11 +886,13 @@ function TimeRow({
 
 function ReviewRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2">
-      <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-500">
+    <div className="flex items-start justify-between gap-4 rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
+      <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {label}
       </span>
-      <span className="text-right text-xs text-slate-900">{value}</span>
+      <span className="text-right text-xs text-slate-900 dark:text-slate-100">
+        {value}
+      </span>
     </div>
   );
 }

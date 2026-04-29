@@ -66,71 +66,71 @@ export function PassphraseSection({ googleSub }: { googleSub: string }) {
   }
 
   if (status === "loading") {
-    return <p className="text-sm text-slate-400">Checking your browser…</p>;
+    return <p className="text-sm text-slate-400 dark:text-slate-500">Checking your browser…</p>;
   }
 
   if (status === "set") {
     return (
       <div className="space-y-3">
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-          <span aria-hidden className="text-emerald-600">✓</span>
-          <span>
-            Passphrase is set in this browser. AI provider keys saved in commit 4
-            will be encrypted with it before they touch your Drive.
-          </span>
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+          Passphrase is set in this browser. AI provider keys are encrypted
+          with it before they touch your Drive.
         </div>
         <button
           type="button"
           onClick={onClear}
           disabled={pending}
-          className="text-xs font-medium text-slate-500 underline-offset-2 hover:text-slate-900 hover:underline disabled:opacity-50"
+          className="text-xs font-medium text-slate-500 underline-offset-2 hover:text-slate-900 hover:underline disabled:opacity-50 dark:text-slate-400 dark:hover:text-slate-100"
         >
           Forget passphrase on this browser
         </button>
         {error ? (
-          <p className="text-xs text-red-600">{error}</p>
+          <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
         ) : null}
       </div>
     );
   }
 
   return (
-    <form
-      action={onSetPassphrase}
-      className="space-y-3"
-    >
+    <form action={onSetPassphrase} className="space-y-3">
       <label className="block">
-        <span className="text-xs font-medium text-slate-700">Passphrase</span>
+        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+          Passphrase
+        </span>
         <input
           name="passphrase"
           type="password"
           required
           autoComplete="new-password"
           minLength={8}
-          className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500"
+          className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
           placeholder="At least 8 characters"
         />
       </label>
       <label className="block">
-        <span className="text-xs font-medium text-slate-700">Confirm</span>
+        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+          Confirm
+        </span>
         <input
           name="confirm"
           type="password"
           required
           autoComplete="new-password"
           minLength={8}
-          className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500"
+          className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
         />
       </label>
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {pending ? "Saving…" : "Save passphrase"}
       </button>
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
-      <p className="text-[11px] text-slate-400">
+      {error ? (
+        <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+      ) : null}
+      <p className="text-[11px] text-slate-400 dark:text-slate-500">
         We can&apos;t recover this for you. Use a password manager.
       </p>
     </form>

@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { readMealPlannerConfig } from "./actions";
-import { GenerateClient } from "./GenerateClient";
-import { findFile } from "@/lib/google/drive";
-import { ensureAtomicTrackerLayout } from "@/lib/google/drive";
+import { ensureAtomicTrackerLayout, findFile, readJson } from "@/lib/google/drive";
 import {
+  currentWeekStart,
+  isoDate,
   isoWeekId,
   nextWeekStart,
+  weekEnd,
+  type MealPlan,
 } from "@/lib/tracker/meal-planner-plan";
 import {
   ALL_DIETS,
@@ -15,12 +16,26 @@ import {
   CUISINES,
   HEALTH_OPTIONS,
 } from "@/lib/tracker/meal-planner-defaults";
+import { readMealPlannerConfig } from "./actions";
 import { AppShell } from "@/components/AppShell";
+import { WeekCard } from "@/components/WeekCard";
 
 const APP_VERSION = "0.1.0";
 
-function labelFor(options: { id: string; label: string }[], id: string): string {
-  return options.find((o) => o.id === id)?.label ?? id;
+async function loadPlanForWeek(
+  accessToken: string,
+  mealsFolderId: string,
+  weekId: string,
+): Promise<MealPlan | null> {
+  const acceptedId = await findFile(accessToken, `${weekId}.json`, mealsFolderId);
+  if (acceptedId) {
+    return await readJson<MealPlan>(accessToken, acceptedId).catch(() => null);
+  }
+  const draftId = await findFile(accessToken, `${weekId}.draft.json`, mealsFolderId);
+  if (draftId) {
+    return await readJson<MealPlan>(accessToken, draftId).catch(() => null);
+  }
+  return null;
 }
 
 export default async function MealPlannerHomePage() {
@@ -32,20 +47,21 @@ export default async function MealPlannerHomePage() {
   const accessToken = session!.accessToken!;
   const googleSub = session!.googleSub!;
 
-  const targetWeekId = isoWeekId(nextWeekStart());
+  const currentMonday = currentWeekStart();
+  const nextMonday = nextWeekStart();
+  const currentId = isoWeekId(currentMonday);
+  const nextId = isoWeekId(nextMonday);
 
-  // Has a plan (draft or accepted) already been generated for next week?
   const layout = await ensureAtomicTrackerLayout(accessToken, {
     googleSub,
     appVersion: APP_VERSION,
   });
-  let existingDraftId: string | null = null;
   const mealsFolderId = layout.folderIds["history/meals"];
-  if (mealsFolderId) {
-    existingDraftId =
-      (await findFile(accessToken, `${targetWeekId}.draft.json`, mealsFolderId)) ||
-      (await findFile(accessToken, `${targetWeekId}.json`, mealsFolderId));
-  }
+
+  const [currentPlan, nextPlan] = await Promise.all([
+    mealsFolderId ? loadPlanForWeek(accessToken, mealsFolderId, currentId) : null,
+    mealsFolderId ? loadPlanForWeek(accessToken, mealsFolderId, nextId) : null,
+  ]);
 
   return (
     <AppShell
@@ -55,14 +71,36 @@ export default async function MealPlannerHomePage() {
       rightSlot={
         <Link
           href="/trackers/meal-planner/setup"
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
         >
           Edit
         </Link>
       }
     >
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+      {/* Two week cards — current week (already started) + next week (focus of planning). */}
+      <section className="space-y-4">
+        <WeekCard
+          weekId={currentId}
+          weekStart={isoDate(currentMonday)}
+          weekEnd={isoDate(weekEnd(currentMonday))}
+          plan={currentPlan}
+          isCurrent
+          cheatDay={config.cheatDay}
+          googleSub={googleSub}
+        />
+        <WeekCard
+          weekId={nextId}
+          weekStart={isoDate(nextMonday)}
+          weekEnd={isoDate(weekEnd(nextMonday))}
+          plan={nextPlan}
+          isCurrent={false}
+          cheatDay={config.cheatDay}
+          googleSub={googleSub}
+        />
+      </section>
+
+      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Configuration
         </h2>
         <dl className="mt-3 space-y-2 text-sm">
@@ -70,7 +108,7 @@ export default async function MealPlannerHomePage() {
             label="Diet"
             value={
               [
-                ...config.diets.map((id) => labelFor(ALL_DIETS, id)),
+                ...config.diets.map((id) => labelOf(ALL_DIETS, id)),
                 config.customDiet,
               ]
                 .filter(Boolean)
@@ -82,7 +120,7 @@ export default async function MealPlannerHomePage() {
             value={
               [
                 ...config.healthConditions.map((id) =>
-                  labelFor(HEALTH_OPTIONS, id),
+                  labelOf(HEALTH_OPTIONS, id),
                 ),
                 config.customHealth,
               ]
@@ -95,7 +133,7 @@ export default async function MealPlannerHomePage() {
             value={
               [
                 ...config.allergies.map((id) =>
-                  labelFor(COMMON_ALLERGIES, id),
+                  labelOf(COMMON_ALLERGIES, id),
                 ),
                 ...config.customAllergies,
               ]
@@ -107,7 +145,7 @@ export default async function MealPlannerHomePage() {
             label="Cuisines"
             value={
               [
-                ...config.cuisines.map((id) => labelFor(CUISINES, id)),
+                ...config.cuisines.map((id) => labelOf(CUISINES, id)),
                 ...config.customCuisines,
               ].join(", ") || "—"
             }
@@ -118,43 +156,27 @@ export default async function MealPlannerHomePage() {
           />
           <Row label="Repeats / week" value={`${config.repeatsPerWeek}`} />
           <Row
+            label="Cheat day"
+            value={config.cheatDay ?? "None"}
+          />
+          <Row
             label="Mealtimes"
             value={`${config.mealtimes.breakfast} · ${config.mealtimes.lunch} · ${config.mealtimes.dinner}`}
           />
         </dl>
       </section>
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          {targetWeekId}
-        </h2>
-        <p className="mt-1 text-xs text-slate-500">
-          Generates 7 dinners using your saved AI key.
-        </p>
-        {existingDraftId ? (
-          <Link
-            href={`/trackers/meal-planner/plan?week=${targetWeekId}`}
-            className="mt-4 block w-full rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-900 hover:bg-emerald-100"
-          >
-            View this week&apos;s plan →
-          </Link>
-        ) : null}
-        <div className="mt-4">
-          <GenerateClient googleSub={googleSub} />
-        </div>
-      </section>
-
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Prep check-in
         </h2>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
           Sunday flow — mark the dinners you&apos;ve prepped and add
           breakfast/lunch. We&apos;ll schedule them on your Calendar.
         </p>
         <Link
           href="/trackers/meal-planner/prep"
-          className="mt-4 block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="mt-4 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
         >
           Open prep check-in →
         </Link>
@@ -163,13 +185,19 @@ export default async function MealPlannerHomePage() {
   );
 }
 
+function labelOf(options: { id: string; label: string }[], id: string): string {
+  return options.find((o) => o.id === id)?.label ?? id;
+}
+
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
+    <div className="flex items-start justify-between gap-4 rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
       <dt className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {label}
       </dt>
-      <dd className="text-right text-xs text-slate-900 dark:text-slate-100">{value}</dd>
+      <dd className="text-right text-xs text-slate-900 dark:text-slate-100">
+        {value}
+      </dd>
     </div>
   );
 }

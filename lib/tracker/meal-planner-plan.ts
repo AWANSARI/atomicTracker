@@ -54,15 +54,38 @@ export type MealPlan = {
 
 // ─── ISO week helpers ──────────────────────────────────────────────────────
 
-/** Monday at UTC midnight of the week starting strictly AFTER today. */
-export function nextWeekStart(now: Date = new Date()): Date {
+/** Monday at UTC midnight of the week containing `now`. */
+export function currentWeekStart(now: Date = new Date()): Date {
   const day = now.getUTCDay(); // 0=Sun, 1=Mon, …, 6=Sat
-  // Days until next Monday (1..7). If today is Mon, we want next Mon (7).
-  const daysUntilMonday = ((1 - day + 7) % 7) || 7;
+  // ISO weeks start on Monday. If today is Sun, current week's Mon was 6 days ago.
+  const daysFromMonday = day === 0 ? 6 : day - 1;
   const monday = new Date(now);
-  monday.setUTCDate(now.getUTCDate() + daysUntilMonday);
+  monday.setUTCDate(now.getUTCDate() - daysFromMonday);
   monday.setUTCHours(0, 0, 0, 0);
   return monday;
+}
+
+/** Monday at UTC midnight of the week starting strictly AFTER today. */
+export function nextWeekStart(now: Date = new Date()): Date {
+  const monday = currentWeekStart(now);
+  monday.setUTCDate(monday.getUTCDate() + 7);
+  return monday;
+}
+
+/** Parse a "YYYY-Wnn" weekId back into the Monday date for that week. */
+export function weekStartFromId(weekId: string): Date | null {
+  const m = /^(\d{4})-W(\d{2})$/.exec(weekId);
+  if (!m) return null;
+  const year = parseInt(m[1]!, 10);
+  const week = parseInt(m[2]!, 10);
+  // ISO 8601: week 1 is the one containing Jan 4.
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7; // Mon=1..Sun=7
+  const week1Monday = new Date(jan4);
+  week1Monday.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
+  const target = new Date(week1Monday);
+  target.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
+  return target;
 }
 
 /** Sunday end of the same week. */

@@ -50,21 +50,21 @@ export function DataExport() {
         type="button"
         onClick={onDownload}
         disabled={pending}
-        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
       >
         {pending ? "Building zip…" : "Download all my data (.zip)"}
       </button>
       {last ? (
-        <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
-          ✓ Downloaded <code className="font-mono">{last.filename}</code> · {last.files} files · {formatBytes(last.size)}
+        <p className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+          Downloaded <code className="font-mono">{last.filename}</code> · {last.files} files · {formatBytes(last.size)}
         </p>
       ) : null}
       {error ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-900">
+        <p className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
           {error}
         </p>
       ) : null}
-      <p className="text-[11px] text-slate-400">
+      <p className="text-[11px] text-slate-400 dark:text-slate-500">
         Mirrors your /AtomicTracker Drive folder (config, plans, grocery lists,
         prep state). Open in any text editor or Sheets/Excel.
       </p>

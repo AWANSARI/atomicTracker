@@ -12,10 +12,12 @@ import {
   isoWeekId,
   nextWeekStart,
   weekEnd,
+  weekStartFromId,
   youtubeSearchUrl,
   type MealPlan,
 } from "@/lib/tracker/meal-planner-plan";
 import { parseMeals } from "@/lib/tracker/meal-planner-validate";
+import { findFile } from "@/lib/google/drive";
 import { PROVIDERS, type ProviderId } from "@/lib/ai/providers";
 
 // AI generation can take 5-15s; bump from 10s default to give Claude/OpenAI/Gemini headroom.
@@ -29,15 +31,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  let body: { provider?: string; apiKey?: string };
+  let body: {
+    provider?: string;
+    apiKey?: string;
+    weekId?: string;
+    overwrite?: boolean;
+  };
   try {
-    body = (await req.json()) as { provider?: string; apiKey?: string };
+    body = (await req.json()) as typeof body;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
   const provider = body.provider as ProviderId | undefined;
   const apiKey = body.apiKey;
+  const requestedWeekId = body.weekId;
+  const overwrite = Boolean(body.overwrite);
+
   if (!provider || !PROVIDERS[provider]) {
     return NextResponse.json({ error: "Invalid provider" }, { status: 400 });
   }
@@ -54,12 +64,48 @@ export async function POST(req: Request) {
     );
   }
 
-  // Compute target week
-  const ws = nextWeekStart();
+  // Compute target week — either the explicitly requested one, or next week
+  let ws: Date;
+  if (requestedWeekId) {
+    const parsed = weekStartFromId(requestedWeekId);
+    if (!parsed) {
+      return NextResponse.json({ error: "Invalid weekId" }, { status: 400 });
+    }
+    ws = parsed;
+  } else {
+    ws = nextWeekStart();
+  }
   const we = weekEnd(ws);
   const weekId = isoWeekId(ws);
   const weekStart = isoDate(ws);
   const weekEndStr = isoDate(we);
+
+  // Check if a plan already exists for this week. If so and overwrite is not
+  // set, return 409 with status info so the client can prompt for confirmation.
+  const layoutPre = await ensureAtomicTrackerLayout(session.accessToken, {
+    googleSub: session.googleSub,
+    appVersion: APP_VERSION,
+  });
+  const mealsFolderId = layoutPre.folderIds["history/meals"];
+  let existingStatus: "draft" | "accepted" | null = null;
+  if (mealsFolderId) {
+    const acceptedId = await findFile(session.accessToken, `${weekId}.json`, mealsFolderId);
+    if (acceptedId) existingStatus = "accepted";
+    else {
+      const draftId = await findFile(session.accessToken, `${weekId}.draft.json`, mealsFolderId);
+      if (draftId) existingStatus = "draft";
+    }
+  }
+  if (existingStatus && !overwrite) {
+    return NextResponse.json(
+      {
+        error: "A plan already exists for this week",
+        existingStatus,
+        weekId,
+      },
+      { status: 409 },
+    );
+  }
 
   // TODO commit 7+: read recent history. For now, empty.
   const recentHistory: MealPlan[] = [];
