@@ -19,6 +19,10 @@ type ConnectorsPayload = {
     apiKey: string;
     addedAt: string;
   };
+  youtube?: {
+    apiKey: string;
+    addedAt: string;
+  };
   // telegram, etc. arrive in later commits
 };
 

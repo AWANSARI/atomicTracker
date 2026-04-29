@@ -90,6 +90,7 @@ GUIDELINES
 - Each meal should be realistically preparable in a home kitchen in under an hour.
 - Use ingredients from the user's pantry preferentially; supplement with common pantry items only when needed.
 - For youtube_query, write a concrete search query that would surface a credible recipe video. Include the cuisine and dish name. Avoid generic terms.
+- For each ingredient, set "category" to one of: "produce", "protein", "dairy", "grain", "pantry", "spice", "frozen", "other". This is used to group items in the user's grocery list. Examples: tomato/onion/spinach -> produce; chicken/lamb/tofu/eggs/lentils -> protein; milk/yogurt/paneer/cheese/butter -> dairy; rice/pasta/bread/oats -> grain; oil/sauce/flour/sugar -> pantry; cumin/turmeric/garlic powder -> spice; frozen peas/corn -> frozen.
 
 OUTPUT
 Return ONLY valid JSON. No markdown fences, no prose before or after. Schema:
@@ -104,7 +105,7 @@ Return ONLY valid JSON. No markdown fences, no prose before or after. Schema:
       "macros": { "protein_g": 30, "carbs_g": 60, "fat_g": 22, "fiber_g": 8 },
       "health_notes": "1-2 sentences explaining how this meal fits the user's health/diet profile.",
       "ingredients": [
-        { "name": "paneer", "qty": "200", "unit": "g" }
+        { "name": "paneer", "qty": "200", "unit": "g", "category": "dairy" }
       ],
       "instructions": "2-3 sentences of cooking steps. Not a full recipe.",
       "youtube_query": "palak paneer authentic recipe restaurant style"

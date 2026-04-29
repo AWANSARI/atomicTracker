@@ -18,6 +18,7 @@ import {
 } from "@/lib/tracker/meal-planner-plan";
 import { parseMeals } from "@/lib/tracker/meal-planner-validate";
 import { findFile } from "@/lib/google/drive";
+import { fetchTopRecipeVideo } from "@/lib/youtube/lookup";
 import { PROVIDERS, type ProviderId } from "@/lib/ai/providers";
 
 // AI generation can take 5-15s; bump from 10s default to give Claude/OpenAI/Gemini headroom.
@@ -34,6 +35,7 @@ export async function POST(req: Request) {
   let body: {
     provider?: string;
     apiKey?: string;
+    youtubeKey?: string;
     weekId?: string;
     overwrite?: boolean;
   };
@@ -45,6 +47,7 @@ export async function POST(req: Request) {
 
   const provider = body.provider as ProviderId | undefined;
   const apiKey = body.apiKey;
+  const youtubeKey = typeof body.youtubeKey === "string" ? body.youtubeKey : "";
   const requestedWeekId = body.weekId;
   const overwrite = Boolean(body.overwrite);
 
@@ -140,9 +143,18 @@ export async function POST(req: Request) {
     );
   }
 
-  // Attach YouTube search URLs
+  // Attach YouTube fallback search URL on every meal. If a YouTube key was
+  // provided, also look up a specific top-result video for each meal's query.
   for (const m of meals) {
     m.recipe_url = youtubeSearchUrl(m.youtube_query);
+  }
+  if (youtubeKey) {
+    await Promise.all(
+      meals.map(async (m) => {
+        const video = await fetchTopRecipeVideo(youtubeKey, m.youtube_query);
+        if (video) m.recipe_video = video;
+      }),
+    );
   }
 
   const plan: MealPlan = {

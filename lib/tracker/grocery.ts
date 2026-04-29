@@ -16,11 +16,31 @@ export type GroceryRow = {
   purchased_at: string;
 };
 
-/** Build a grocery list from a meal plan. One row per (day, ingredient). */
+/**
+ * Order categories appear in the grocery list. Roughly matches a typical
+ * supermarket walk: produce first, then proteins, dairy, grains, pantry,
+ * spices, frozen at the end.
+ */
+const CATEGORY_ORDER: Record<string, number> = {
+  produce: 1,
+  protein: 2,
+  dairy: 3,
+  grain: 4,
+  pantry: 5,
+  spice: 6,
+  frozen: 7,
+  other: 8,
+  "": 9,
+};
+
+/**
+ * Build a grocery list from a meal plan. One row per (day, ingredient),
+ * sorted by aisle category for grouped shopping.
+ */
 export function buildGroceryRows(plan: MealPlan): GroceryRow[] {
   const rows: GroceryRow[] = [];
   for (const meal of plan.meals) {
-    const recipe = meal.recipe_url ?? "";
+    const recipe = meal.recipe_video?.url ?? meal.recipe_url ?? "";
     for (const ing of meal.ingredients) {
       rows.push({
         week: plan.weekId,
@@ -28,7 +48,7 @@ export function buildGroceryRows(plan: MealPlan): GroceryRow[] {
         item: ing.name,
         qty: ing.qty,
         unit: ing.unit,
-        category: "",
+        category: ing.category ?? "other",
         walmart_url: walmartSearch(ing.name),
         amazon_url: amazonSearch(ing.name),
         doordash_url: doordashSearch(ing.name),
@@ -38,6 +58,13 @@ export function buildGroceryRows(plan: MealPlan): GroceryRow[] {
       });
     }
   }
+  // Sort: category order, then item name (case-insensitive)
+  rows.sort((a, b) => {
+    const ca = CATEGORY_ORDER[a.category] ?? 9;
+    const cb = CATEGORY_ORDER[b.category] ?? 9;
+    if (ca !== cb) return ca - cb;
+    return a.item.toLowerCase().localeCompare(b.item.toLowerCase());
+  });
   return rows;
 }
 

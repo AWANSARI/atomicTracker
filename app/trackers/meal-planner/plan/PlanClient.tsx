@@ -20,7 +20,8 @@ type ChatMsg = { role: "user" | "assistant"; content: string };
 
 type AcceptResult = {
   ok: boolean;
-  csv?: { driveFileId: string; itemCount: number };
+  partial?: boolean;
+  csv?: { driveFileId: string; itemCount: number } | null;
   calendar?: {
     events: { name: string; ok: boolean; htmlLink?: string; error?: string }[];
     deleted?: { id: string; deleted: boolean; error?: string }[];
@@ -31,6 +32,7 @@ type AcceptResult = {
 type ConnectorsPayload = {
   v: 1;
   ai?: { provider: ProviderId; apiKey: string; addedAt: string };
+  youtube?: { apiKey: string; addedAt: string };
 };
 
 async function getKey(googleSub: string) {
@@ -40,7 +42,11 @@ async function getKey(googleSub: string) {
   if (!envelope) throw new Error("Connect an AI provider in Settings first");
   const payload = await decryptJson<ConnectorsPayload>(envelope, passphrase, googleSub);
   if (!payload.ai) throw new Error("No AI provider configured");
-  return { provider: payload.ai.provider, apiKey: payload.ai.apiKey };
+  return {
+    provider: payload.ai.provider,
+    apiKey: payload.ai.apiKey,
+    youtubeKey: payload.youtube?.apiKey,
+  };
 }
 
 export function PlanClient({
@@ -56,6 +62,7 @@ export function PlanClient({
 
   // Accept state
   const [accepting, setAccepting] = useState(false);
+  const [syncingDay, setSyncingDay] = useState<Day | null>(null);
   const [acceptResult, setAcceptResult] = useState<AcceptResult | null>(null);
 
   // Chat state
@@ -86,11 +93,11 @@ export function PlanClient({
     setError(null);
     setBusyDay(day);
     try {
-      const { provider, apiKey } = await getKey(googleSub);
+      const { provider, apiKey, youtubeKey } = await getKey(googleSub);
       const res = await fetch("/api/swap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey, plan, dayToSwap: day }),
+        body: JSON.stringify({ provider, apiKey, youtubeKey, plan, dayToSwap: day }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -118,12 +125,12 @@ export function PlanClient({
     setError(null);
     setBusyDay("all");
     try {
-      const { provider, apiKey } = await getKey(googleSub);
+      const { provider, apiKey, youtubeKey } = await getKey(googleSub);
       const lockedDays = plan.meals.filter((m) => m.locked).map((m) => m.day);
       const res = await fetch("/api/regenerate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey, plan, lockedDays }),
+        body: JSON.stringify({ provider, apiKey, youtubeKey, plan, lockedDays }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -154,14 +161,49 @@ export function PlanClient({
         const j = await res.json().catch(() => ({}));
         throw new Error((j as { error?: string }).error ?? `${res.status}`);
       }
-      const data = (await res.json()) as AcceptResult;
+      const data = (await res.json()) as AcceptResult & { plan?: MealPlan };
       setAcceptResult(data);
-      // Reflect accepted status locally
-      setPlan((p) => ({ ...p, status: "accepted" }));
+      // Reflect accepted status locally + clear modifiedByDay markers
+      if (data.plan) setPlan(data.plan);
+      else setPlan((p) => ({ ...p, status: "accepted", modifiedByDay: {} }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setAccepting(false);
+    }
+  }
+
+  async function syncDay(day: Day) {
+    setError(null);
+    setSyncingDay(day);
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      const res = await fetch("/api/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          weekId: plan.weekId,
+          timezone: tz,
+          onlyDays: [day],
+        }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error((j as { error?: string }).error ?? `${res.status}`);
+      }
+      const data = (await res.json()) as AcceptResult & { plan?: MealPlan };
+      if (data.plan) setPlan(data.plan);
+      else
+        setPlan((p) => ({
+          ...p,
+          modifiedByDay: Object.fromEntries(
+            Object.entries(p.modifiedByDay ?? {}).filter(([d]) => d !== day),
+          ),
+        }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSyncingDay(null);
     }
   }
 
@@ -250,15 +292,21 @@ export function PlanClient({
       </section>
 
       <section className="mt-4 space-y-3">
-        {plan.meals.map((m) => (
-          <MealCard
-            key={m.day}
-            meal={m}
-            busy={busyDay === m.day || busyDay === "all"}
-            onLock={() => toggleLock(m.day)}
-            onSwap={() => swapDay(m.day)}
-          />
-        ))}
+        {plan.meals.map((m) => {
+          const isStaleOnCalendar = Boolean(plan.modifiedByDay?.[m.day]);
+          return (
+            <MealCard
+              key={m.day}
+              meal={m}
+              busy={busyDay === m.day || busyDay === "all"}
+              syncing={syncingDay === m.day}
+              isStaleOnCalendar={isStaleOnCalendar}
+              onLock={() => toggleLock(m.day)}
+              onSwap={() => swapDay(m.day)}
+              onSync={() => syncDay(m.day)}
+            />
+          );
+        })}
       </section>
 
       {/* Accept */}
@@ -326,9 +374,11 @@ function AcceptedSummary({
   return (
     <div className="mt-3 space-y-3 text-sm">
       <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-        {result.reaccept
-          ? `Re-accepted. Removed ${deletedCount} previous Calendar event${deletedCount === 1 ? "" : "s"} and rewrote the grocery list.`
-          : "Plan accepted. Grocery list and Calendar events written."}
+        {result.partial
+          ? `Synced. Replaced ${deletedCount} stale Calendar event${deletedCount === 1 ? "" : "s"} for the changed day.`
+          : result.reaccept
+            ? `Re-accepted. Removed ${deletedCount} previous Calendar event${deletedCount === 1 ? "" : "s"} and rewrote the grocery list.`
+            : "Plan accepted. Grocery list and Calendar events written."}
       </div>
       {result.csv ? (
         <a
@@ -493,13 +543,19 @@ function ChatSheet({
 function MealCard({
   meal,
   busy,
+  syncing,
+  isStaleOnCalendar,
   onLock,
   onSwap,
+  onSync,
 }: {
   meal: Meal;
   busy: boolean;
+  syncing: boolean;
+  isStaleOnCalendar: boolean;
   onLock: () => void;
   onSwap: () => void;
+  onSync: () => void;
 }) {
   return (
     <article
@@ -568,27 +624,54 @@ function MealCard({
         <p className="mt-2 text-slate-700 dark:text-slate-300">{meal.instructions}</p>
       </details>
 
-      <div className="mt-3 flex items-center gap-2">
-        {meal.recipe_url ? (
-          <a
-            href={meal.recipe_url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+      {isStaleOnCalendar ? (
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          <span>Calendar event is stale — meal changed after accept.</span>
+          <button
+            type="button"
+            onClick={onSync}
+            disabled={syncing || busy}
+            className="shrink-0 rounded-md border border-amber-300 bg-white px-2 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/60"
           >
-            <PlayCircle className="h-3 w-3" />
-            Recipe video
-          </a>
-        ) : null}
-        <button
-          type="button"
-          onClick={onSwap}
-          disabled={busy || meal.locked}
-          className="ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-        >
-          <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
-          {busy ? "…" : meal.locked ? "Locked" : "Swap"}
-        </button>
+            {syncing ? "Syncing…" : "Sync to Calendar"}
+          </button>
+        </div>
+      ) : null}
+
+      <div className="mt-3 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {meal.recipe_video ? (
+            <a
+              href={meal.recipe_video.url}
+              target="_blank"
+              rel="noreferrer"
+              title={`${meal.recipe_video.title} · ${meal.recipe_video.channel}`}
+              className="inline-flex max-w-full items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700 transition hover:bg-red-100 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/60"
+            >
+              <PlayCircle className="h-3 w-3 shrink-0" />
+              <span className="truncate">{meal.recipe_video.title}</span>
+            </a>
+          ) : null}
+          {meal.recipe_url ? (
+            <a
+              href={meal.recipe_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              {meal.recipe_video ? "Browse more" : "Recipe video"}
+            </a>
+          ) : null}
+          <button
+            type="button"
+            onClick={onSwap}
+            disabled={busy || meal.locked}
+            className="ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
+            {busy ? "…" : meal.locked ? "Locked" : "Swap"}
+          </button>
+        </div>
       </div>
     </article>
   );

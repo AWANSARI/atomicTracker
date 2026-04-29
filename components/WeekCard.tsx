@@ -32,20 +32,26 @@ export function WeekCard({
   );
 
   return (
-    <article className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-      <header
-        className={`flex items-center justify-between border-b px-4 py-3 ${
-          isCurrent
-            ? "border-brand-200 bg-brand-50/60 dark:border-brand-900 dark:bg-brand-950/30"
-            : "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40"
-        }`}
-      >
+    <article
+      className={`overflow-hidden rounded-xl border bg-white dark:bg-slate-900 ${
+        isCurrent
+          ? "border-l-4 border-l-brand-500 border-y-slate-200 border-r-slate-200 dark:border-l-brand-500 dark:border-y-slate-800 dark:border-r-slate-800"
+          : "border-slate-200 dark:border-slate-800"
+      }`}
+    >
+      <header className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
         <div className="flex items-center gap-2">
           <CalendarDays
             className={`h-4 w-4 ${isCurrent ? "text-brand-600 dark:text-brand-400" : "text-slate-500 dark:text-slate-400"}`}
           />
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <p
+              className={`text-[10px] font-semibold uppercase tracking-wider ${
+                isCurrent
+                  ? "text-brand-700 dark:text-brand-400"
+                  : "text-slate-500 dark:text-slate-400"
+              }`}
+            >
               {isCurrent ? "This week" : "Next week"} · {weekId}
             </p>
             <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">
@@ -84,7 +90,7 @@ export function WeekCard({
         })}
       </ul>
 
-      <footer className="space-y-2 border-t border-slate-200 bg-slate-50/50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+      <footer className="space-y-2 border-t border-slate-100 px-4 py-3 dark:border-slate-800">
         {plan ? (
           <Link
             href={`/trackers/meal-planner/plan?week=${weekId}`}

@@ -13,6 +13,7 @@ import {
   type Day,
   type MealPlan,
 } from "@/lib/tracker/meal-planner-plan";
+import { fetchTopRecipeVideo } from "@/lib/youtube/lookup";
 import { PROVIDERS, type ProviderId } from "@/lib/ai/providers";
 
 export const maxDuration = 60;
@@ -28,6 +29,7 @@ export async function POST(req: Request) {
   let body: {
     provider?: string;
     apiKey?: string;
+    youtubeKey?: string;
     plan?: MealPlan;
     dayToSwap?: string;
   };
@@ -39,6 +41,7 @@ export async function POST(req: Request) {
 
   const provider = body.provider as ProviderId | undefined;
   const apiKey = body.apiKey;
+  const youtubeKey = typeof body.youtubeKey === "string" ? body.youtubeKey : "";
   const plan = body.plan;
   const dayToSwap = body.dayToSwap as Day | undefined;
 
@@ -86,13 +89,24 @@ export async function POST(req: Request) {
     newMeal.day = dayToSwap;
   }
   newMeal.recipe_url = youtubeSearchUrl(newMeal.youtube_query);
+  if (youtubeKey) {
+    const video = await fetchTopRecipeVideo(youtubeKey, newMeal.youtube_query);
+    if (video) newMeal.recipe_video = video;
+  }
 
-  // Build updated plan
+  // Build updated plan + mark this day as modified-after-accept
   const updatedMeals = plan.meals.map((m) => (m.day === dayToSwap ? newMeal : m));
+  const modifiedByDay: Partial<Record<Day, string>> = {
+    ...(plan.modifiedByDay ?? {}),
+  };
+  if (plan.status === "accepted") {
+    modifiedByDay[dayToSwap] = new Date().toISOString();
+  }
   const updatedPlan: MealPlan = {
     ...plan,
     generatedBy: { provider, model: generated.model },
     meals: updatedMeals,
+    modifiedByDay,
   };
 
   // Save back to Drive

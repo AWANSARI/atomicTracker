@@ -8,11 +8,13 @@ import {
   upsertJson,
   upsertText,
 } from "@/lib/google/drive";
-import { createEvent, deleteEvent, localDateTime } from "@/lib/google/calendar";
+import { addMinutes, createEvent, deleteEvent, localDateTime } from "@/lib/google/calendar";
 import { buildGroceryRows, rowsToCsv } from "@/lib/tracker/grocery";
 import {
+  type Day,
   type MealPlan,
 } from "@/lib/tracker/meal-planner-plan";
+import { readMealPlannerConfig } from "@/app/trackers/meal-planner/actions";
 
 export const maxDuration = 60;
 const APP_VERSION = "0.1.0";
@@ -24,7 +26,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  let body: { weekId?: string; timezone?: string; mealtimes?: { breakfast: string; lunch: string; dinner: string } };
+  let body: {
+    weekId?: string;
+    timezone?: string;
+    /** Optional: if set, only re-accept these specific days (per-day partial re-accept). */
+    onlyDays?: string[];
+  };
   try {
     body = await req.json();
   } catch {
@@ -33,6 +40,10 @@ export async function POST(req: Request) {
   const weekId = body.weekId;
   const timezone =
     typeof body.timezone === "string" && body.timezone ? body.timezone : "UTC";
+  const onlyDays = (body.onlyDays ?? []).filter(
+    (d): d is Day => ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].includes(d),
+  );
+  const partial = onlyDays.length > 0;
 
   if (!weekId || typeof weekId !== "string") {
     return NextResponse.json({ error: "Missing weekId" }, { status: 400 });
@@ -68,13 +79,23 @@ export async function POST(req: Request) {
     );
   }
 
-  // 0. If this plan was previously accepted, delete its existing Calendar
-  // events so this accept truly *overwrites* rather than duplicates.
-  const previousEventIds = Array.isArray(plan.calendarEventIds)
-    ? plan.calendarEventIds
-    : [];
+  // 0. Delete previous events for the days we're re-accepting.
+  // Full re-accept (no onlyDays): clear admin events + ALL per-day dinner events.
+  // Partial re-accept (onlyDays set): clear ONLY the per-day events for those days.
+  const previousAdminEventIds: string[] = partial
+    ? []
+    : Array.isArray(plan.calendarEventIds)
+      ? plan.calendarEventIds
+      : [];
+  const previousDayEventIds: { day: Day; id: string }[] = [];
+  const existingByDay = plan.eventIdByDay ?? {};
+  for (const day of (Object.keys(existingByDay) as Day[])) {
+    if (partial && !onlyDays.includes(day)) continue;
+    const id = existingByDay[day];
+    if (id) previousDayEventIds.push({ day, id });
+  }
   const deletionResults: { id: string; deleted: boolean; error?: string }[] = [];
-  for (const eventId of previousEventIds) {
+  for (const eventId of previousAdminEventIds) {
     try {
       const deleted = await deleteEvent(session.accessToken, eventId);
       deletionResults.push({ id: eventId, deleted });
@@ -86,58 +107,88 @@ export async function POST(req: Request) {
       });
     }
   }
+  for (const { id } of previousDayEventIds) {
+    try {
+      const deleted = await deleteEvent(session.accessToken, id);
+      deletionResults.push({ id, deleted });
+    } catch (e) {
+      deletionResults.push({
+        id,
+        deleted: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
 
-  // 1. Build + write grocery CSV and JSON mirror
+  // Need config for dinner time
+  const config = await readMealPlannerConfig();
+
+  // 1. Build + write grocery CSV and JSON mirror.
+  // Skip on partial re-accept (CSV doesn't reflect per-day deltas cleanly).
   const rows = buildGroceryRows(plan);
   const csv = rowsToCsv(rows);
-  let csvFileId: string;
-  let groceryJsonId: string;
-  try {
-    csvFileId = await upsertText(
-      session.accessToken,
-      groceryFolderId,
-      `${weekId}-list.csv`,
-      csv,
-      "text/csv",
-    );
-    groceryJsonId = await upsertJson(
-      session.accessToken,
-      groceryFolderId,
-      `${weekId}-list.json`,
-      { week: weekId, generatedAt: new Date().toISOString(), rows },
-    );
-  } catch (e) {
-    return NextResponse.json(
-      { error: `Drive write (grocery) failed: ${e instanceof Error ? e.message : String(e)}` },
-      { status: 500 },
-    );
+  let csvFileId: string | null = null;
+  let groceryJsonId: string | null = null;
+  if (!partial) {
+    try {
+      csvFileId = await upsertText(
+        session.accessToken,
+        groceryFolderId,
+        `${weekId}-list.csv`,
+        csv,
+        "text/csv",
+      );
+      groceryJsonId = await upsertJson(
+        session.accessToken,
+        groceryFolderId,
+        `${weekId}-list.json`,
+        { week: weekId, generatedAt: new Date().toISOString(), rows },
+      );
+    } catch (e) {
+      return NextResponse.json(
+        { error: `Drive write (grocery) failed: ${e instanceof Error ? e.message : String(e)}` },
+        { status: 500 },
+      );
+    }
   }
 
   // 2. Save plan as accepted, delete draft if it was a separate file.
-  // Note: we set acceptedAt + reset calendarEventIds (filled below) so the
-  // plan reflects this accept's events, not stale ones.
+  // For full accept: reset both adminEventIds + per-day eventIdByDay to be filled below.
+  // For partial: keep existing structure, only mutate the touched days below.
   const acceptedPlan: MealPlan = {
     ...plan,
     status: "accepted",
-    acceptedAt: new Date().toISOString(),
-    calendarEventIds: [],
+    acceptedAt: partial ? plan.acceptedAt ?? new Date().toISOString() : new Date().toISOString(),
+    calendarEventIds: partial ? plan.calendarEventIds ?? [] : [],
+    eventIdByDay: partial ? { ...(plan.eventIdByDay ?? {}) } : {},
+    modifiedByDay: partial
+      ? Object.fromEntries(
+          Object.entries(plan.modifiedByDay ?? {}).filter(([d]) => !onlyDays.includes(d as Day)),
+        )
+      : {},
   };
-  let acceptedFileId: string;
+  // Clear per-day event IDs we just deleted (will be repopulated below for the days we re-create).
+  if (partial) {
+    for (const day of onlyDays) {
+      delete acceptedPlan.eventIdByDay![day];
+    }
+  }
   try {
-    acceptedFileId = await upsertJson(
+    await upsertJson(
       session.accessToken,
       mealsFolderId,
       `${weekId}.json`,
       acceptedPlan,
     );
-    // If we read from a draft (not the same file as accepted), trash the draft.
-    const draftStillExists = await findFile(
-      session.accessToken,
-      `${weekId}.draft.json`,
-      mealsFolderId,
-    );
-    if (draftStillExists) {
-      await deleteFile(session.accessToken, draftStillExists);
+    if (!partial) {
+      const draftStillExists = await findFile(
+        session.accessToken,
+        `${weekId}.draft.json`,
+        mealsFolderId,
+      );
+      if (draftStillExists) {
+        await deleteFile(session.accessToken, draftStillExists);
+      }
     }
   } catch (e) {
     return NextResponse.json(
@@ -154,8 +205,61 @@ export async function POST(req: Request) {
   const prepCheckinUrl = `${PLAN_DEEP_LINK_BASE}/trackers/meal-planner/prep?week=${weekId}`;
 
   const eventResults: { name: string; ok: boolean; htmlLink?: string; error?: string }[] = [];
-  const newEventIds: string[] = [];
+  const newAdminEventIds: string[] = [];
+  const newEventIdByDay: Partial<Record<Day, string>> = {};
 
+  // ---- Per-day dinner events (always created) ----
+  const weekStartDate = new Date(plan.weekStart + "T00:00:00Z");
+  const DAY_OFFSETS: Record<Day, number> = {
+    Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6,
+  };
+  const dinnerTime = config?.mealtimes.dinner ?? "19:00";
+
+  for (const meal of plan.meals) {
+    if (partial && !onlyDays.includes(meal.day)) continue;
+    const dayDate = new Date(weekStartDate);
+    dayDate.setUTCDate(weekStartDate.getUTCDate() + DAY_OFFSETS[meal.day]);
+    try {
+      const ev = await createEvent(session.accessToken, {
+        summary: `🍽 ${meal.name}`,
+        description: [
+          `${meal.cuisine} · ${meal.calories} kcal`,
+          `Macros — P ${meal.macros.protein_g}g / C ${meal.macros.carbs_g}g / F ${meal.macros.fat_g}g / Fib ${meal.macros.fiber_g}g`,
+          "",
+          meal.health_notes,
+          "",
+          "Ingredients:",
+          ...meal.ingredients.map((i) => `  • ${i.qty} ${i.unit} ${i.name}`),
+          "",
+          `Instructions: ${meal.instructions}`,
+          ...(meal.recipe_video?.url
+            ? ["", `Recipe: ${meal.recipe_video.title} — ${meal.recipe_video.url}`]
+            : meal.recipe_url
+              ? ["", `Recipe search: ${meal.recipe_url}`]
+              : []),
+        ].join("\n"),
+        start: localDateTime(dayDate, dinnerTime, timezone),
+        end: localDateTime(dayDate, addMinutes(dinnerTime, 60), timezone),
+        reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 30 }] },
+        ...(meal.recipe_video?.url
+          ? { source: { title: "Recipe video", url: meal.recipe_video.url } }
+          : {}),
+      });
+      newEventIdByDay[meal.day] = ev.id;
+      eventResults.push({ name: `${meal.day} · ${meal.name}`, ok: true, htmlLink: ev.htmlLink });
+    } catch (e) {
+      eventResults.push({
+        name: `${meal.day} · ${meal.name}`,
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  // ---- Admin events (only on full accept) ----
+  if (partial) {
+    // Skip admin event creation; preserve existing IDs in acceptedPlan.calendarEventIds
+  } else {
   try {
     const ev1 = await createEvent(session.accessToken, {
       summary: "AtomicTracker · Plan next week's meals",
@@ -169,7 +273,7 @@ export async function POST(req: Request) {
         overrides: [{ method: "popup", minutes: 0 }],
       },
     });
-    newEventIds.push(ev1.id);
+    newAdminEventIds.push(ev1.id);
     eventResults.push({ name: "Friday plan reminder", ok: true, htmlLink: ev1.htmlLink });
   } catch (e) {
     eventResults.push({
@@ -192,7 +296,7 @@ export async function POST(req: Request) {
         overrides: [{ method: "popup", minutes: 0 }],
       },
     });
-    newEventIds.push(ev2.id);
+    newAdminEventIds.push(ev2.id);
     eventResults.push({ name: "Sunday prep check-in", ok: true, htmlLink: ev2.htmlLink });
   } catch (e) {
     eventResults.push({
@@ -221,7 +325,7 @@ export async function POST(req: Request) {
         overrides: [{ method: "popup", minutes: 60 }],
       },
     });
-    newEventIds.push(ev3.id);
+    newAdminEventIds.push(ev3.id);
     eventResults.push({ name: "Grocery shopping", ok: true, htmlLink: ev3.htmlLink });
   } catch (e) {
     eventResults.push({
@@ -230,10 +334,18 @@ export async function POST(req: Request) {
       error: e instanceof Error ? e.message : String(e),
     });
   }
+  } // end of !partial admin events block
 
-  // Persist the new event IDs back into the accepted plan so a future
-  // re-accept can delete *these* events instead of leaking duplicates.
-  acceptedPlan.calendarEventIds = newEventIds;
+  // Persist the new event IDs back into the accepted plan.
+  if (!partial) {
+    acceptedPlan.calendarEventIds = newAdminEventIds;
+    acceptedPlan.eventIdByDay = newEventIdByDay;
+  } else {
+    acceptedPlan.eventIdByDay = {
+      ...(acceptedPlan.eventIdByDay ?? {}),
+      ...newEventIdByDay,
+    };
+  }
   try {
     await upsertJson(
       session.accessToken,
@@ -253,16 +365,19 @@ export async function POST(req: Request) {
     ok: true,
     weekId,
     plan: acceptedPlan,
-    csv: {
-      driveFileId: csvFileId,
-      jsonMirrorId: groceryJsonId,
-      itemCount: rows.length,
-    },
+    partial,
+    csv: partial
+      ? null
+      : {
+          driveFileId: csvFileId,
+          jsonMirrorId: groceryJsonId,
+          itemCount: rows.length,
+        },
     calendar: {
       events: eventResults,
       deleted: deletionResults,
     },
-    reaccept: previousEventIds.length > 0,
+    reaccept: previousAdminEventIds.length > 0 || previousDayEventIds.length > 0,
   });
 }
 

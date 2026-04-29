@@ -21,12 +21,24 @@ export function parseSingleMeal(item: unknown): Meal | null {
     return null;
   if (typeof m.health_notes !== "string") return null;
   if (!Array.isArray(m.ingredients)) return null;
+  const validCategories = [
+    "produce",
+    "protein",
+    "dairy",
+    "grain",
+    "pantry",
+    "spice",
+    "frozen",
+    "other",
+  ] as const;
   const ingredients = m.ingredients.map((i) => {
     const ing = i as Record<string, unknown>;
+    const cat = String(ing.category ?? "other") as (typeof validCategories)[number];
     return {
       name: String(ing.name ?? ""),
       qty: String(ing.qty ?? ""),
       unit: String(ing.unit ?? ""),
+      category: validCategories.includes(cat) ? cat : ("other" as const),
     };
   });
   if (typeof m.instructions !== "string") return null;

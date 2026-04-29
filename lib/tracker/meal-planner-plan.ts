@@ -14,10 +14,29 @@ export type Macros = {
   fiber_g: number;
 };
 
+export type IngredientCategory =
+  | "produce"
+  | "protein"
+  | "dairy"
+  | "grain"
+  | "pantry"
+  | "spice"
+  | "frozen"
+  | "other";
+
 export type Ingredient = {
   name: string;
   qty: string;
   unit: string;
+  /** Aisle/category for grocery list grouping. Set by AI during generation. */
+  category?: IngredientCategory;
+};
+
+export type RecipeVideo = {
+  id: string;
+  title: string;
+  channel: string;
+  url: string;
 };
 
 export type Meal = {
@@ -30,7 +49,10 @@ export type Meal = {
   ingredients: Ingredient[];
   instructions: string;
   youtube_query: string;
+  /** YouTube fallback search URL (always present). */
   recipe_url?: string;
+  /** Specific top-result video, populated when a YouTube key is configured. */
+  recipe_video?: RecipeVideo;
   /** Optional client-side state (carried in JSON for resilience). */
   locked?: boolean;
 };
@@ -47,9 +69,13 @@ export type MealPlan = {
   };
   status: "draft" | "accepted";
   meals: Meal[];
-  /** IDs of Calendar events created at the last accept. Used to delete on re-accept. */
+  /** IDs of admin events (Friday/Sunday/Saturday) created at the last accept. */
   calendarEventIds?: string[];
+  /** Per-day dinner event IDs from accept. Used for per-day re-accept. */
+  eventIdByDay?: Partial<Record<Day, string>>;
   acceptedAt?: string;
+  /** Per-day timestamp of last meal modification (after accept). */
+  modifiedByDay?: Partial<Record<Day, string>>;
 };
 
 // ─── ISO week helpers ──────────────────────────────────────────────────────

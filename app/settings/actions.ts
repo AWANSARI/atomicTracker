@@ -10,6 +10,7 @@ import {
 } from "@/lib/google/drive";
 import type { EncryptedEnvelope } from "@/lib/crypto/webcrypto";
 import { testProviderKey } from "@/lib/ai/test-keys";
+import { testYouTubeKey } from "@/lib/youtube/lookup";
 import type { ProviderId } from "@/lib/ai/providers";
 
 const APP_VERSION = "0.1.0";
@@ -92,4 +93,15 @@ export async function testKeyAction(
   const result = await testProviderKey(provider, apiKey);
   // Note: returning result is fine; the key is not echoed back.
   return result;
+}
+
+export async function testYouTubeKeyAction(
+  apiKey: string,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAuth();
+  if (typeof apiKey !== "string" || apiKey.length < 8) {
+    return { ok: false, error: "Key looks too short" };
+  }
+  const ok = await testYouTubeKey(apiKey);
+  return ok ? { ok: true } : { ok: false, error: "Invalid or unauthorized YouTube key" };
 }

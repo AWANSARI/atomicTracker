@@ -11,6 +11,7 @@ import { readConnectorEnvelope } from "@/app/settings/actions";
 type ConnectorsPayload = {
   v: 1;
   ai?: { provider: ProviderId; apiKey: string; addedAt: string };
+  youtube?: { apiKey: string; addedAt: string };
 };
 
 type Phase = "idle" | "decrypting" | "calling" | "saving" | "error";
@@ -55,6 +56,7 @@ export function GenerateClient({
       body: JSON.stringify({
         provider: ai.provider,
         apiKey: ai.apiKey,
+        youtubeKey: payload.youtube?.apiKey,
         weekId,
         overwrite,
       }),

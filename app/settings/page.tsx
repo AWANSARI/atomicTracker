@@ -2,6 +2,7 @@ import { auth, signOut } from "@/auth";
 import { AppShell } from "@/components/AppShell";
 import { PassphraseSection } from "./PassphraseSection";
 import { ConnectorWizard } from "./ConnectorWizard";
+import { YouTubeKeySection } from "./YouTubeKeySection";
 import { DataExport } from "./DataExport";
 
 export default async function SettingsPage() {
@@ -58,10 +59,19 @@ export default async function SettingsPage() {
       </Section>
 
       <Section
+        title="YouTube (recipe videos)"
+        description="Optional. Looks up a specific recommended recipe video for each meal."
+      >
+        <YouTubeKeySection googleSub={googleSub} />
+      </Section>
+
+      <Section
         title="Other connectors"
         description="Telegram, OpenClaw, Claude Routine — wizards arrive in later commits."
       >
-        <p className="text-sm text-slate-500">Nothing connected yet.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Nothing connected yet.
+        </p>
       </Section>
 
       <Section

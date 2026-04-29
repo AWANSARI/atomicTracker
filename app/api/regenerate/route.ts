@@ -13,6 +13,7 @@ import {
   type Day,
   type MealPlan,
 } from "@/lib/tracker/meal-planner-plan";
+import { fetchTopRecipeVideo } from "@/lib/youtube/lookup";
 import { PROVIDERS, type ProviderId } from "@/lib/ai/providers";
 
 export const maxDuration = 60;
@@ -28,6 +29,7 @@ export async function POST(req: Request) {
   let body: {
     provider?: string;
     apiKey?: string;
+    youtubeKey?: string;
     plan?: MealPlan;
     lockedDays?: string[];
   };
@@ -39,6 +41,7 @@ export async function POST(req: Request) {
 
   const provider = body.provider as ProviderId | undefined;
   const apiKey = body.apiKey;
+  const youtubeKey = typeof body.youtubeKey === "string" ? body.youtubeKey : "";
   const plan = body.plan;
   const lockedDays = (body.lockedDays ?? []).filter((d): d is Day =>
     VALID_DAYS.includes(d as Day),
@@ -91,6 +94,16 @@ export async function POST(req: Request) {
     }
     return { ...m, recipe_url: youtubeSearchUrl(m.youtube_query) };
   });
+  // Look up YouTube videos for unlocked meals if a key is provided
+  if (youtubeKey) {
+    await Promise.all(
+      finalMeals.map(async (m) => {
+        if (m.locked) return;
+        const video = await fetchTopRecipeVideo(youtubeKey, m.youtube_query);
+        if (video) m.recipe_video = video;
+      }),
+    );
+  }
 
   const updatedPlan: MealPlan = {
     ...plan,
