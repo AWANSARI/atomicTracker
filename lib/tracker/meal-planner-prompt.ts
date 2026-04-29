@@ -146,6 +146,53 @@ OUTPUT — return ONLY this JSON shape (no array, no fences, no prose):
 }`;
 }
 
+// ─── Chat (free-form Q&A about the current plan) ───────────────────────────
+
+export function buildChatSystemPrompt(args: {
+  config: MealPlannerConfig;
+  currentPlan: MealPlan | null;
+}): string {
+  const { config, currentPlan } = args;
+  const dietLabels = [
+    ...config.diets.map((id) => labelOf(ALL_DIETS, id)),
+    config.customDiet,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const healthLabels = [
+    ...config.healthConditions.map((id) => labelOf(HEALTH_OPTIONS, id)),
+    config.customHealth,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  const planSummary = currentPlan
+    ? currentPlan.meals
+        .map(
+          (m) =>
+            `  ${m.day}: ${m.name} (${m.cuisine}) — ${m.calories} kcal, P/C/F/Fib ${m.macros.protein_g}/${m.macros.carbs_g}/${m.macros.fat_g}/${m.macros.fiber_g}g`,
+        )
+        .join("\n")
+    : "  (no plan yet)";
+
+  return `You are AtomicTracker's meal-planning assistant in a chat panel. Be concise. The user is reviewing the plan below.
+
+USER PROFILE
+  Diet: ${dietLabels || "(none)"}
+  Health: ${healthLabels || "(none)"}
+  Allergies: ${config.allergies.join(", ") || "(none)"}
+  Cuisines: ${config.cuisines.join(", ") || "(any)"}
+
+CURRENT PLAN${currentPlan ? ` (${currentPlan.weekId})` : ""}
+${planSummary}
+
+CHAT GUIDELINES
+- Answer in 1-3 short sentences unless the user asks for detail.
+- If the user asks to *change* a meal, suggest exactly what to swap — but tell them to use the Swap button next to that day's card to apply it. Don't claim you've changed anything.
+- If the user asks for nutrition advice, be helpful but include a brief reminder this isn't medical advice.
+- Refer to the user's saved diet/health/allergies when relevant.`;
+}
+
 // ─── Regenerate (preserve locked, replace the rest) ────────────────────────
 
 export function buildRegeneratePrompt(args: {

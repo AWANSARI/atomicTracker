@@ -242,6 +242,38 @@ export async function upsertJson(
   return uploadFile(accessToken, parentId, name, content);
 }
 
+/** Upsert raw text/CSV content. Like upsertJson but with custom mime. */
+export async function upsertText(
+  accessToken: string,
+  parentId: string,
+  name: string,
+  content: string,
+  mimeType: string,
+): Promise<string> {
+  const existing = await findFile(accessToken, name, parentId);
+  if (existing) {
+    await updateFile(accessToken, existing, content, mimeType);
+    return existing;
+  }
+  return uploadFile(accessToken, parentId, name, content, mimeType);
+}
+
+/** Delete (trash) a file. Drive's drive.file scope allows trashing files we created. */
+export async function deleteFile(
+  accessToken: string,
+  fileId: string,
+): Promise<void> {
+  const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  // 204 = success, 404 = already gone (treat as success)
+  if (!res.ok && res.status !== 404) {
+    const body = await res.text().catch(() => "");
+    throw new DriveError(res.statusText, res.status, body);
+  }
+}
+
 // ─── Bootstrap ──────────────────────────────────────────────────────────────
 
 /**

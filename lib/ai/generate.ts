@@ -152,3 +152,113 @@ async function safeText(res: Response): Promise<string> {
     return "(no body)";
   }
 }
+
+// ─── Chat (free-form text reply) ────────────────────────────────────────────
+
+export type ChatMessage = { role: "user" | "assistant"; content: string };
+
+export async function generateChatReply(
+  provider: ProviderId,
+  apiKey: string,
+  systemPrompt: string,
+  history: ChatMessage[],
+): Promise<{ reply: string; model: string }> {
+  switch (provider) {
+    case "anthropic":
+      return chatAnthropic(apiKey, systemPrompt, history);
+    case "openai":
+      return chatOpenAI(apiKey, systemPrompt, history);
+    case "gemini":
+      return chatGemini(apiKey, systemPrompt, history);
+  }
+}
+
+async function chatAnthropic(
+  apiKey: string,
+  systemPrompt: string,
+  history: ChatMessage[],
+): Promise<{ reply: string; model: string }> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 600,
+      system: systemPrompt,
+      messages: history.map((m) => ({ role: m.role, content: m.content })),
+    }),
+  });
+  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await safeText(res)}`);
+  const data = (await res.json()) as {
+    content: Array<{ type: string; text?: string }>;
+  };
+  const text = data.content
+    .map((c) => (c.type === "text" ? c.text : ""))
+    .join("")
+    .trim();
+  return { reply: text, model: ANTHROPIC_MODEL };
+}
+
+async function chatOpenAI(
+  apiKey: string,
+  systemPrompt: string,
+  history: ChatMessage[],
+): Promise<{ reply: string; model: string }> {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...history.map((m) => ({ role: m.role, content: m.content })),
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI ${res.status}: ${await safeText(res)}`);
+  const data = (await res.json()) as {
+    choices: Array<{ message?: { content?: string } }>;
+  };
+  return {
+    reply: data.choices[0]?.message?.content?.trim() ?? "",
+    model: OPENAI_MODEL,
+  };
+}
+
+async function chatGemini(
+  apiKey: string,
+  systemPrompt: string,
+  history: ChatMessage[],
+): Promise<{ reply: string; model: string }> {
+  // Gemini doesn't have a separate "system" role for v1beta — prepend to first user message
+  const contents = history.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents,
+        generationConfig: { temperature: 0.5 },
+      }),
+    },
+  );
+  if (!res.ok) throw new Error(`Gemini ${res.status}: ${await safeText(res)}`);
+  const data = (await res.json()) as {
+    candidates: Array<{ content: { parts: Array<{ text?: string }> } }>;
+  };
+  const text =
+    data.candidates[0]?.content.parts.map((p) => p.text).join("").trim() ?? "";
+  return { reply: text, model: GEMINI_MODEL };
+}
