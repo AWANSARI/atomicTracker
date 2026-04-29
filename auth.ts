@@ -1,5 +1,7 @@
 import NextAuth, { type Session } from "next-auth";
 import Google from "next-auth/providers/google";
+import { getToken } from "next-auth/jwt";
+import { cookies } from "next/headers";
 
 /**
  * Google OAuth scopes we request:
@@ -139,3 +141,59 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 });
 
 export type { Session };
+
+/**
+ * Server-only helper: decode the encrypted JWT cookie and return the Google
+ * refresh_token stored on it.
+ *
+ * The session callback intentionally does NOT expose `refresh_token` — any
+ * client using `auth()` could otherwise read it. This helper exists only for
+ * a privileged path (the Claude Code Routine setup endpoint) that needs to
+ * embed the refresh token into a long-lived dispatch token.
+ *
+ * Returns null if no JWT cookie is present, the cookie can't be decoded, or
+ * the token does not carry a refresh_token.
+ *
+ * IMPORTANT: never log the return value, never expose it on a Session, never
+ * pass it to a client component. Use it inline and discard.
+ */
+export async function getCurrentRefreshToken(): Promise<string | null> {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) return null;
+  try {
+    // Auth.js v5 uses these cookie names depending on environment. getToken
+    // checks the right one automatically when secureCookie is the default.
+    const cookieStore = await cookies();
+    // Adapter: getToken expects a Next.js request — we shim a minimal one
+    // from cookies() so this works inside server actions / route handlers.
+    const token = await getToken({
+      // Reconstruct just enough of the request shape getToken needs.
+      req: {
+        cookies: {
+          get: (name: string) => {
+            const c = cookieStore.get(name);
+            return c ? { name: c.name, value: c.value } : undefined;
+          },
+        },
+        headers: new Headers(),
+      } as unknown as Parameters<typeof getToken>[0]["req"],
+      secret,
+      // Auth.js v5 default cookie name is "authjs.session-token" (or the
+      // __Secure-* variant on https). Pass salt explicitly so JWE decrypt
+      // works in either environment.
+      salt:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-authjs.session-token"
+          : "authjs.session-token",
+      cookieName:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-authjs.session-token"
+          : "authjs.session-token",
+      secureCookie: process.env.NODE_ENV === "production",
+    });
+    const rt = (token as { refresh_token?: unknown } | null)?.refresh_token;
+    return typeof rt === "string" && rt.length > 0 ? rt : null;
+  } catch {
+    return null;
+  }
+}
