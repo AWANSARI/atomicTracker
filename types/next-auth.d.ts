@@ -9,6 +9,10 @@ declare module "next-auth" {
   interface Session {
     /** Set to "RefreshAccessTokenError" if Google rejected the refresh attempt. */
     error?: "RefreshAccessTokenError";
+    /** Google OAuth access token. Server-side use only. */
+    accessToken?: string;
+    /** Google OAuth `sub` (stable user id). Used as identity for crypto key derivation. */
+    googleSub?: string;
     user?: DefaultSession["user"];
   }
 }

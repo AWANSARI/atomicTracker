@@ -114,12 +114,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
 
     /**
-     * Session callback shapes what the client sees.
-     * We deliberately do NOT expose access/refresh tokens to the client —
-     * server actions and route handlers can still read them via auth().
+     * Session callback shapes what the auth() helper returns on the server.
+     *
+     * We expose the access_token and the Google `sub` here so server
+     * components and server actions can call Google APIs on behalf of the
+     * user. Refresh token is intentionally NOT exposed — the jwt() callback
+     * handles refreshing.
+     *
+     * IMPORTANT: do NOT call useSession() and read access_token from a
+     * client component. We avoid useSession() entirely in this codebase
+     * for that reason. All auth checks happen via auth() server-side.
      */
     async session({ session, token }) {
       session.error = token.error as Session["error"];
+      session.accessToken = token.access_token as string | undefined;
+      session.googleSub = token.sub as string | undefined;
       return session;
     },
   },
