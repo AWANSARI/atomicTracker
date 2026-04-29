@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { decryptJson, encryptJson } from "@/lib/crypto/webcrypto";
-import { loadPassphrase } from "@/lib/storage/passphrase";
+import { loadPassphrase, subscribePassphrase } from "@/lib/storage/passphrase";
 import type { ProviderId } from "@/lib/ai/providers";
 import {
   readConnectorEnvelope,
@@ -39,27 +39,38 @@ export function YouTubeKeySection({ googleSub }: { googleSub: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void (async () => {
+    let cancelled = false;
+    async function reload() {
       try {
         const passphrase = await loadPassphrase();
+        if (cancelled) return;
         if (!passphrase) {
           setLoaded({ kind: "no-passphrase" });
           return;
         }
         const envelope = await readConnectorEnvelope();
+        if (cancelled) return;
         const payload: ConnectorsPayload = envelope
           ? await decryptJson<ConnectorsPayload>(envelope, passphrase, googleSub)
           : { v: 1 };
+        if (cancelled) return;
         setLoaded(
           payload.youtube
             ? { kind: "has-youtube", passphrase, payload }
             : { kind: "no-youtube", passphrase, payload },
         );
       } catch (e) {
+        if (cancelled) return;
         setError(e instanceof Error ? e.message : String(e));
         setLoaded({ kind: "no-passphrase" });
       }
-    })();
+    }
+    void reload();
+    const unsubscribe = subscribePassphrase(() => void reload());
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [googleSub]);
 
   async function onTest() {

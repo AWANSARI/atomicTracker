@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { decryptJson, encryptJson } from "@/lib/crypto/webcrypto";
 import type { EncryptedEnvelope } from "@/lib/crypto/webcrypto";
-import { loadPassphrase } from "@/lib/storage/passphrase";
+import { loadPassphrase, subscribePassphrase } from "@/lib/storage/passphrase";
 import { PROVIDERS, type ProviderId } from "@/lib/ai/providers";
 import {
   readConnectorEnvelope,
@@ -48,27 +48,38 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
   );
   const [error, setError] = useState<string | null>(null);
 
-  // Initial load: passphrase + envelope
+  // Initial load + re-load when the passphrase changes elsewhere on the page.
   useEffect(() => {
-    void (async () => {
+    let cancelled = false;
+    async function reload() {
       try {
         const passphrase = await loadPassphrase();
+        if (cancelled) return;
         if (!passphrase) {
           setLoaded({ kind: "no-passphrase" });
           return;
         }
         const envelope = await readConnectorEnvelope();
+        if (cancelled) return;
         if (!envelope) {
           setLoaded({ kind: "no-connectors", passphrase });
           return;
         }
         const payload = await decryptJson<ConnectorsPayload>(envelope, passphrase, googleSub);
+        if (cancelled) return;
         setLoaded({ kind: "has-ai", passphrase, payload });
       } catch (e) {
+        if (cancelled) return;
         setError(e instanceof Error ? e.message : String(e));
         setLoaded({ kind: "no-passphrase" });
       }
-    })();
+    }
+    void reload();
+    const unsubscribe = subscribePassphrase(() => void reload());
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [googleSub]);
 
   function startWizard() {

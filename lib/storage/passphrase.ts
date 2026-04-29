@@ -15,6 +15,33 @@ const DB_VERSION = 1;
 const STORE = "kv";
 const PASSPHRASE_KEY = "passphrase";
 
+/**
+ * Window event fired whenever the passphrase changes (set or cleared).
+ * Other Settings sections subscribe so they unlock/lock immediately
+ * without a page reload — see `subscribePassphrase` below.
+ */
+export const PASSPHRASE_CHANGED_EVENT = "atomictracker:passphrase-changed";
+
+function dispatchChange(): void {
+  if (typeof window !== "undefined") {
+    try {
+      window.dispatchEvent(new CustomEvent(PASSPHRASE_CHANGED_EVENT));
+    } catch {
+      // Swallow — environment without CustomEvent support, save still succeeded.
+    }
+  }
+}
+
+/**
+ * Subscribe to passphrase-changed events. Returns an unsubscribe function.
+ * Safe to call from React useEffect — the listener is a no-op outside the browser.
+ */
+export function subscribePassphrase(callback: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(PASSPHRASE_CHANGED_EVENT, callback);
+  return () => window.removeEventListener(PASSPHRASE_CHANGED_EVENT, callback);
+}
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -46,6 +73,7 @@ async function withStore<T>(
 
 export async function savePassphrase(passphrase: string): Promise<void> {
   await withStore<IDBValidKey>("readwrite", (s) => s.put(passphrase, PASSPHRASE_KEY));
+  dispatchChange();
 }
 
 export async function loadPassphrase(): Promise<string | null> {
@@ -55,4 +83,5 @@ export async function loadPassphrase(): Promise<string | null> {
 
 export async function clearPassphrase(): Promise<void> {
   await withStore<undefined>("readwrite", (s) => s.delete(PASSPHRASE_KEY));
+  dispatchChange();
 }
