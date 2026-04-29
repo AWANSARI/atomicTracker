@@ -338,7 +338,7 @@ export async function uploadBinary(
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": `multipart/related; boundary=${boundary}`,
       },
-      body,
+      body: new Blob([body]),
     },
   );
   if (!res.ok) {

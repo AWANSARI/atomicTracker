@@ -116,7 +116,7 @@ export async function POST(req: Request) {
             Authorization: `Bearer ${session.accessToken}`,
             "Content-Type": XLSX_MIME,
           },
-          body: xlsxBytes,
+          body: new Blob([xlsxBytes], { type: XLSX_MIME }),
         },
       );
       if (!res.ok) {
