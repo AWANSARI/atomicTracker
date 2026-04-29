@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { auth, signOut } from "@/auth";
-import { readAtomicTrackerLayout } from "@/lib/google/drive";
+import { findFile, readAtomicTrackerLayout } from "@/lib/google/drive";
 import { bootstrapDriveFolder } from "./actions";
 
 export default async function DashboardPage() {
@@ -13,6 +13,17 @@ export default async function DashboardPage() {
   // so the first-load latency is fast and the bootstrap is observable.
   const layout = await readAtomicTrackerLayout(accessToken);
   const isBootstrapped = layout != null;
+
+  // AI connector: just check the file exists (we don't decrypt server-side).
+  let hasAiConnector = false;
+  if (layout?.folderIds["config"]) {
+    const fileId = await findFile(
+      accessToken,
+      "connectors.enc.json",
+      layout.folderIds["config"],
+    );
+    hasAiConnector = fileId != null;
+  }
 
   return (
     <main className="mx-auto min-h-dvh max-w-md px-6 py-10">
@@ -100,8 +111,12 @@ export default async function DashboardPage() {
           />
           <ConnectionRow
             label="AI provider"
-            status="not-connected"
-            note="Wizard arrives in commit 4"
+            status={hasAiConnector ? "connected" : "not-connected"}
+            note={
+              hasAiConnector
+                ? "Encrypted in /config/connectors.enc.json"
+                : "Set up in Settings"
+            }
           />
         </ul>
 

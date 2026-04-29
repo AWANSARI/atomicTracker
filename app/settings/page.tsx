@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth, signOut } from "@/auth";
 import { PassphraseSection } from "./PassphraseSection";
+import { ConnectorWizard } from "./ConnectorWizard";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -59,8 +60,15 @@ export default async function SettingsPage() {
       </Section>
 
       <Section
-        title="Connectors"
-        description="AI provider, Telegram, OpenClaw, Claude Routine — wizards arrive in commit 4."
+        title="AI provider"
+        description="Pick Claude, OpenAI, or Gemini. Your key is encrypted with the passphrase above before it's written to your Drive."
+      >
+        <ConnectorWizard googleSub={googleSub} />
+      </Section>
+
+      <Section
+        title="Other connectors"
+        description="Telegram, OpenClaw, Claude Routine — wizards arrive in later commits."
       >
         <p className="text-sm text-slate-500">Nothing connected yet.</p>
       </Section>
