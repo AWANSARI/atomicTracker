@@ -245,43 +245,48 @@ export function MealPlannerWizard({
         <ReviewStep config={config} suggested={suggestedIngredients.length} />
       ) : null}
 
-      <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={back}
-          disabled={step === 0 || pending}
-          className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
-        >
-          Back
-        </button>
-        <span className="text-xs text-slate-400">
-          Step {step + 1} of {STEP_LABELS.length}
-        </span>
-        {step < LAST_STEP ? (
-          <button
-            type="button"
-            onClick={next}
-            className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
-          >
-            Next
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={pending}
-            className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
-          >
-            {pending ? "Saving…" : "Save"}
-          </button>
-        )}
-      </div>
-
       {error ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-900">
+        <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
           {error}
         </p>
       ) : null}
+
+      {/* Sticky nav bar that sits just above the AppShell bottom nav. The
+          negative horizontal margin breaks out of the page's px-6 padding so
+          the border + backdrop spans the full max-w-md container width. */}
+      <div className="sticky bottom-14 -mx-6 mt-6 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-[#0d1117]/95">
+        <div className="flex items-center justify-between gap-2 px-6 py-3">
+          <button
+            type="button"
+            onClick={back}
+            disabled={step === 0 || pending}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            Back
+          </button>
+          <span className="text-xs text-slate-400 dark:text-slate-500">
+            Step {step + 1} of {STEP_LABELS.length}
+          </span>
+          {step < LAST_STEP ? (
+            <button
+              type="button"
+              onClick={next}
+              className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
+            >
+              Next
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={pending}
+              className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
+            >
+              {pending ? "Saving…" : "Save"}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -567,14 +572,14 @@ function CookingFrequencyStep({
               onClick={() => onChange(opt.id)}
               className={`block w-full rounded-xl border p-3 text-left transition ${
                 on
-                  ? "border-brand-500 bg-brand-50 dark:bg-brand-950"
-                  : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900"
+                  ? "border-brand-600 bg-brand-600 text-white shadow-sm"
+                  : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
               }`}
             >
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+              <p className={`text-sm font-semibold ${on ? "text-white" : "text-slate-900 dark:text-slate-50"}`}>
                 {opt.label}
               </p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <p className={`mt-1 text-xs ${on ? "text-white/80" : "text-slate-500 dark:text-slate-400"}`}>
                 {opt.hint}
               </p>
             </button>
