@@ -20,6 +20,7 @@ import { readMealPlannerConfig } from "./actions";
 import { AppShell } from "@/components/AppShell";
 import { WeekCard } from "@/components/WeekCard";
 import { RemindersClient } from "./RemindersClient";
+import { FavoritesManager } from "./FavoritesManager";
 import {
   canComputeTargets,
   computeBmi,
@@ -181,6 +182,26 @@ export default async function MealPlannerHomePage() {
               <Row label="Notes" value={config.nutritionistNotes} />
             ) : null}
           </dl>
+        </details>
+      </section>
+
+      {/* Favorites — collapsed by default. Hearted dishes from any plan show
+          here, plus a free-text "Add custom" input. The AI prompt picks these
+          up to bias generation toward what the user actually likes. */}
+      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <details>
+          <summary className="flex cursor-pointer items-center justify-between gap-2">
+            <span className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Favorites
+            </span>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+              {config.favoriteMeals.length + config.favoriteIngredients.length} saved
+            </span>
+          </summary>
+          <FavoritesManager
+            initialMeals={config.favoriteMeals}
+            initialIngredients={config.favoriteIngredients}
+          />
         </details>
       </section>
 

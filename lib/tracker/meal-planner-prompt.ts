@@ -348,7 +348,8 @@ ${config.cheatDay ? `IMPORTANT: ${config.cheatDay} is the user's cheat day — d
   Pantry — primary ingredients to use: ${ingredients.length ? ingredients.join(", ") : "(no specific pantry — use common ingredients)"}
   Max repeats per dish in this week: ${config.repeatsPerWeek}
   Cooking pattern: ${cookingNote || "Not specified"} — generate dishes that match this pace. Larger batch portions if cooking less frequently.
-  Favorite meals (include if reasonable): ${config.favoriteMeals.length ? config.favoriteMeals.join(", ") : "(none yet)"}${bodyBlock}${nutritionBlock}${nutritionistBlock}${overrideBlock}${adherenceBlock}${cycleBlock}
+  Favorite meals (the user has hearted these — include in this week's plan if reasonable; rotate so we don't repeat the same favorite every week): ${config.favoriteMeals.length ? config.favoriteMeals.join(", ") : "(none yet)"}
+  Favorite ingredients (lean toward these when choosing dishes): ${config.favoriteIngredients.length ? config.favoriteIngredients.join(", ") : "(none yet)"}${bodyBlock}${nutritionBlock}${nutritionistBlock}${overrideBlock}${adherenceBlock}${cycleBlock}
 
 RECENT HISTORY (avoid repeating identical dishes from the previous 4 weeks)
 ${historyLines}

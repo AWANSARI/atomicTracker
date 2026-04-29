@@ -7,6 +7,7 @@ import {
 } from "@/lib/tracker/meal-planner-plan";
 import { PlanClient } from "./PlanClient";
 import { AppShell } from "@/components/AppShell";
+import { readMealPlannerConfig } from "../actions";
 
 const APP_VERSION = "0.1.0";
 
@@ -21,10 +22,13 @@ export default async function PlanPage({
 
   const weekId = searchParams.week ?? isoWeekId(nextWeekStart());
 
-  const layout = await ensureAtomicTrackerLayout(accessToken, {
-    googleSub,
-    appVersion: APP_VERSION,
-  });
+  const [layout, config] = await Promise.all([
+    ensureAtomicTrackerLayout(accessToken, {
+      googleSub,
+      appVersion: APP_VERSION,
+    }),
+    readMealPlannerConfig(),
+  ]);
   const mealsFolderId = layout.folderIds["history/meals"];
 
   let plan: MealPlan | null = null;
@@ -59,7 +63,11 @@ export default async function PlanPage({
           </p>
         </section>
       ) : (
-        <PlanClient initialPlan={plan} googleSub={googleSub} />
+        <PlanClient
+          initialPlan={plan}
+          googleSub={googleSub}
+          initialFavoriteMeals={config?.favoriteMeals ?? []}
+        />
       )}
     </AppShell>
   );

@@ -35,30 +35,40 @@ The Next.js app is a **stateless function host**. Every user's persistent data l
 app/
   layout.tsx                       Root: html/body/font/theme; bg-white dark:bg-[#0d1117]
   page.tsx                         Landing — sign-in form action
-  globals.css                      Tailwind base + GitHub canvas colors
+  globals.css                      Tailwind base + GitHub canvas colors + print stylesheet
   auth-error/page.tsx              OAuth error fallback
   api/
     auth/[...nextauth]/route.ts    NextAuth handler
-    generate/route.ts              POST: create draft plan (maxDuration 60)
-    swap/route.ts                  POST: replace one day's meal
-    regenerate/route.ts            POST: replace all unlocked meals
-    accept/route.ts                POST: write grocery CSV + per-day B/L/D Calendar events;
-                                   accepts onlyDays?: Day[] for partial re-accept
+    generate/route.ts              POST: create draft plan (maxDuration 60). Now produces
+                                   B/L/D + optional snacks (4×7 entries) and feeds the AI an
+                                   AdherenceSummary built from the last 28 days of habit /
+                                   supplement / analytics logs.
+    swap/route.ts                  POST: replace one (day, slot) meal. Body: { dayToSwap,
+                                   slotToSwap?: "breakfast"|"lunch"|"dinner"|"snack" }
+    regenerate/route.ts            POST: replace all unlocked meals (slot-aware locks)
+    accept/route.ts                POST: write grocery CSV + per-(day, slot) Calendar events.
+                                   IDs persisted on MealPlan.eventIdByDaySlot ("${day}/${slot}").
+                                   Legacy MealPlan.eventIdByDay still populated for the dinner
+                                   slot for back-compat. Accepts onlyDays?: Day[] for partial.
     prep/route.ts                  POST: prep check-in events (delete-and-recreate to dedupe)
     chat/route.ts                  POST: free-form AI Q&A about plan
     setup-reminders/route.ts       POST: ONE-TIME create Friday/Sunday/Shopping recurring reminders
-                                   stored on tracker.meal-planner.json (not on each plan)
-    save-plan/route.ts             POST: persist edited plan to Drive without calendar side-effects;
-                                   body: { weekId, plan } → writes {weekId}.json or .draft.json
-    archive/route.ts               POST: generate yearly XLSX archive from all accepted plans
-                                   for a given year; body: { year: number }; writes to
-                                   /AtomicTracker/archive/{year}.xlsx; overwrites if exists
+                                   stored on tracker.meal-planner.json (not on each plan).
+                                   Weekly shopping description points at the meal-planner home —
+                                   each week's grocery list lives on its own accepted plan.
+    save-plan/route.ts             POST: persist edited plan to Drive without calendar side-effects
+    archive/route.ts               POST: generate yearly XLSX archive { year }; writes to
+                                   /AtomicTracker/archive/{year}.xlsx (overwrites if exists)
     export/route.ts                GET: zip mirror of /AtomicTracker Drive folder
-    photos/route.ts                POST: upload a meal photo (FormData: weekId,day,slot,file ≤8MB)
-                                   → Drive /history/photos/{weekId}/{day}-{slot}-{ts}.{ext};
-                                   returns { ok, fileId, viewUrl, name }
+    photos/route.ts                POST: upload meal photo (FormData ≤8MB) → /history/photos/
+    supplements/log/route.ts       POST: per-day adherence log → /history/supplements/{date}.json
+    supplements/setup-reminders/route.ts   POST: daily-recurring Calendar event per supplement slot
+    habits/log/route.ts            POST: per-day habit done-list → /history/habits/{date}.json
+    habits/setup-reminders/route.ts        POST: optional daily-recurring habit reminders
+    analytics/log/route.ts         POST: per-day energy/mood/sleep + optional hairFall/cycle
+                                   → /history/analytics/{date}.json
   dashboard/
-    layout.tsx, page.tsx, actions.ts
+    layout.tsx, page.tsx, actions.ts       "Today" links (Daily timeline, Insights) + Trackers + Connections
   settings/
     page.tsx                       Sections: passphrase, AI provider, YouTube, data export
     PassphraseSection.tsx          Client: IndexedDB-backed passphrase
@@ -67,19 +77,46 @@ app/
     DataExport.tsx                 Client: zip download trigger
     actions.ts                     Server actions: read/save connectors envelope, test keys
     layout.tsx
+  timeline/
+    page.tsx                       Daily timeline view — fuses meals + supplements + habits
+                                   into one chronological day. ?date=YYYY-MM-DD selects a day,
+                                   ?print=fridge swaps to a printable table layout.
+    TimelineClient.tsx             Color-coded chips (meals brand-blue, supplements emerald,
+                                   habits amber, warnings amber-tone), tap-to-expand details
+  insights/
+    page.tsx                       Reads last 28 days of analytics/habits/supplements + last 4
+                                   accepted plans → computeInsights → severity-coded card grid
+    InsightsClient.tsx             Card UI with <details> citations
+    log/page.tsx + InsightsLogClient.tsx   Daily log form (energy/mood/sleep, optional
+                                   hairFall + cycle gated on user's symptoms / sex)
+    actions.ts                     readAnalyticsLog(date), readAnalyticsLogsLast(days) — cached
   trackers/
-    layout.tsx, page.tsx           Tracker picker
+    layout.tsx, page.tsx           Tracker picker — registry-driven from lib/tracker/registry.ts
     meal-planner/
-      page.tsx                     Tracker home: config (collapsed) → WeekCard x2 → recurring reminders
-      actions.ts                   Read/save tracker.meal-planner.json
-      GenerateClient.tsx           Client: generate flow w/ overwrite confirm
+      page.tsx                     Tracker home: config (collapsed) → WeekCard x2 → daily targets card
+      actions.ts                   Read/save tracker.meal-planner.json (defensive merge with defaults)
+      GenerateClient.tsx           Client: generate flow w/ overwrite confirm + per-week override panel
       RemindersClient.tsx          Client: setup-reminders trigger
       setup/
-        page.tsx, MealPlannerWizard.tsx   11-step config wizard
+        page.tsx, MealPlannerWizard.tsx   12-step config wizard (incl. Body & goals + symptoms)
       plan/
-        page.tsx, PlanClient.tsx   Plan review w/ lock/swap/regenerate, accept, chat sheet
+        page.tsx, PlanClient.tsx   Plan review w/ lock/swap/regenerate, slot label per card,
+                                   inline ingredient editing, accept, chat sheet
       prep/
-        page.tsx, PrepClient.tsx   Sunday prep check-in
+        page.tsx, PrepClient.tsx   Sunday prep check-in (per-slot photo upload)
+    supplements/
+      page.tsx, SupplementsClient.tsx      Vertical schedule grouped by time-of-day band;
+                                   tap-to-log, "Setup reminders" CTA, conflict warnings
+      actions.ts                   readSupplementConfig (cached), saveSupplementConfig
+      setup/
+        page.tsx, SupplementWizard.tsx     3-step wizard (Catalog → Custom → Review)
+    habits/
+      page.tsx, HabitsClient.tsx   Big-tap checklist, header chips for streak + week %,
+                                   7-day dot grid per habit, optimistic toggle
+      actions.ts                   readHabitConfig / saveHabitConfig / readHabitLog(date) /
+                                   readHabitLogsLast(days) — all cached
+      setup/
+        page.tsx, HabitsWizard.tsx 4-step wizard (Catalog → Custom → Reminders → Review)
 
 components/
   AppShell.tsx                     Sticky header + scrollable middle + fixed bottom nav (Lucide icons)
@@ -93,20 +130,69 @@ lib/
   crypto/
     webcrypto.ts                   AES-GCM + PBKDF2-SHA256 (250k iters), versioned envelope, browser+Node
   google/
-    drive.ts                       server-only — minimal Drive REST client (no googleapis package)
+    drive.ts                       server-only — minimal Drive REST client (no googleapis package).
+                                   readAtomicTrackerLayout / ensureAtomicTrackerLayout are wrapped
+                                   in React `cache()` for per-request memoization.
     calendar.ts                    server-only — minimal Calendar REST (createEvent/deleteEvent + tz helpers)
   storage/
     passphrase.ts                  client-only — IndexedDB wrapper for the passphrase
   tracker/
-    meal-planner-types.ts          MealPlannerConfig schema
-    meal-planner-defaults.ts       Catalogs (diets, health, allergies, cuisines, cooking freq, days)
-    meal-planner-plan.ts           MealPlan/Meal/Ingredient/RecipeVideo types + ISO-week helpers
-    meal-planner-prompt.ts         AI prompt builders: full-week / swap-one / regenerate-with-locks / chat-system
-    meal-planner-validate.ts       Tolerant parser: parseMeals (1-7), parseSingleMeal, parseMealEnvelope
-    grocery.ts                     Build aggregated grocery rows + RFC-4180 CSV
+    meal-planner-types.ts          MealPlannerConfig schema (incl. body metrics, symptoms[], snacksEnabled)
+    meal-planner-defaults.ts       Catalogs: DIET_GROUPS, HEALTH_OPTIONS, COMMON_ALLERGIES, CUISINES,
+                                   SYMPTOM_OPTIONS (hair-loss, fatigue, brain-fog, irregular-cycle,
+                                   etc.), COOKING_FREQUENCIES, DAYS_OF_WEEK, CUISINE_INGREDIENTS
+                                   (Indian section expanded with poha/dalia/ragi/idli/dosa/millets +
+                                   moong/toor/urad/chana dals)
+    meal-planner-plan.ts           MealPlan/Meal/Ingredient/RecipeVideo types + ISO-week helpers.
+                                   Slot type ("breakfast"|"lunch"|"dinner"|"snack") + SLOT_LABEL.
+                                   eventIdByDaySlot map keyed `${day}/${slot}`.
+    meal-planner-prompt.ts         AI prompt builders: full-week / swap-one / regenerate-with-locks /
+                                   chat-system. Now emits a 4×7 (B/L/D + optional Snack) plan with
+                                   per-slot guidance, body metrics, daily targets, symptoms-aware
+                                   bias, optional WeekOverride and AdherenceSummary blocks, plus
+                                   cycle-phase nutrition guidance (menstrual/follicular/ovulatory/
+                                   luteal/spotting). buildAdherenceSummary() summarizes last 7 days
+                                   from analytics + habit + supplement logs.
+    meal-planner-validate.ts       Tolerant parser: parseMeals (1-28), parseSingleMeal (defaults
+                                   missing slot to "dinner" for back-compat), parseMealEnvelope
+    grocery.ts                     Build aggregated grocery rows + RFC-4180 CSV (groupGroceryRows
+                                   buckets by category for the PlanClient preview)
     xlsx-archive.ts                server-only — buildYearlyArchiveXlsx(plans): Uint8Array;
-                                   Open XML workbook via JSZip (already in package.json);
-                                   12 cols: Week,Day,Name,Cuisine,Cal,P/C/F/Fib,Ingredients,Store,Reheat
+                                   Open XML workbook via JSZip (already in package.json)
+    nutrition.ts                   Pure: computeBmi, computeDailyTargets (Mifflin-St Jeor BMR ×
+                                   activity factor + goal delta), goalLabel, canComputeTargets
+                                   type guard. Macros: protein scaled by bodyweight (1.4-1.8 g/kg
+                                   by goal), fat 25%, carbs fill remainder, fiber 14g per 1000kcal.
+    timeline.ts                    Pure: fuseTimeline + mealsForDate + habitExpectedOn + date
+                                   helpers (todayIso/dateFromIso/isoFromDate). Used by /timeline.
+    supplement-types.ts            SupplementConfig schema (Supplement, TimingRule, TimingHint,
+                                   AvoidTag). Storage at /AtomicTracker/config/tracker.supplements.json.
+    supplement-catalog.ts          14-entry catalog: Levothyroxine, Iron bisglycinate, Vitamin D3,
+                                   B12, Omega-3, Magnesium glycinate, Calcium, Vitamin C, Zinc,
+                                   Multivitamin, Probiotics, Ashwagandha, Inositol, Biotin
+    supplement-rules.ts            Pure: computeDailySchedule(supplements, mealtimes) →
+                                   TimelineSlot[]. Greedy solver respecting empty-stomach,
+                                   bedtime, with-fat hints + gap constraints (iron 2h from
+                                   calcium / 4h from thyroid, magnesium 2h from iron etc.).
+                                   Surfaces human-readable warnings when conflicts unavoidable.
+    habit-types.ts                 HabitConfig + HabitDayLog schemas. Cadence: daily / weekdays /
+                                   weekly / custom.
+    habit-defaults.ts              HABIT_CATALOG (12 suggestions: soaked nuts, seed cycling,
+                                   3 fruits, ginger/garlic, water, walk, sleep ≥7h, sunlight,
+                                   no-screens-bed, warm-water-morning, weekly fish, weekly strength)
+    habit-stats.ts                 Pure: computeHabitStats (currentStreak, longestStreak,
+                                   weeklyCompletion), computeOverallWeeklyCompletion. Cadence-aware:
+                                   non-expected days don't break streaks.
+    analytics-types.ts             AnalyticsDayLog schema (energy 1-5, mood 1-5, sleepHours 0-14,
+                                   optional hairFall, optional cycleMarker, notes) + label catalogs
+    insights.ts                    Pure: computeInsights → InsightCard[]. 7 hand-coded rules
+                                   (protein deficit, sleep deficit, energy uptrend, habit
+                                   consistency shift, hair-fall improving, luteal-phase tip,
+                                   iron-absorption tip). Each rule cites the data window.
+    registry.ts                    TrackerRegistryEntry + TrackerPlaceholder types — the shared
+                                   discovery surface every tracker exposes (id, title, icon,
+                                   href, setupHref, isConfigured probe). app/trackers/page.tsx
+                                   iterates over a TRACKERS array instead of hard-coded markup.
   youtube/
     lookup.ts                      server-only — fetchRecipeVideos(key, q, count=5) returns N results
                                    in one API call; fetchTopRecipeVideo is a backwards-compat wrapper.
@@ -133,22 +219,36 @@ LICENSE                            MIT
   config/
     user.json                            { folderIds, googleSub, tz, locale, bootstrappedAt, appVersion }
     connectors.enc.json                  EncryptedEnvelope { v, ct, iv, salt } — base64
-    tracker.meal-planner.json            MealPlannerConfig (incl. reminderEventIds, eventIdByDay)
+    tracker.meal-planner.json            MealPlannerConfig (body metrics, symptoms, snacksEnabled,
+                                         reminderEventIds, eventIdByDay…)
+    tracker.supplements.json             SupplementConfig (list of supplements + their TimingRule
+                                         + per-supplement reminderEventIds)
+    tracker.habits.json                  HabitConfig (list of habits + cadence + remindersEnabled
+                                         + per-habit reminderEventIds)
   history/
     meals/
       {weekId}.draft.json                Draft (after generate, before accept)
-      {weekId}.json                      Accepted plan (with calendarEventIds, eventIdByDay, modifiedByDay)
-      {weekId}-prep.json                 Prep check-in state (with calendarEventIds)
+      {weekId}.json                      Accepted plan (with calendarEventIds, eventIdByDay,
+                                         eventIdByDaySlot, modifiedByDay, weekOverride?)
+      {weekId}-prep.json                 Prep check-in state (with calendarEventIds + photo viewUrls)
     chats/{ISO-datetime}.json            Optional chat transcripts
     photos/
       {weekId}/
         {day}-{slot}-{timestamp}.{ext}   Meal photos uploaded via PrepClient; viewUrl attached
                                          to Calendar event description and stored in prep.json
+    supplements/
+      {YYYY-MM-DD}.json                  { date, taken: { [supplementId]: takenAtISO } }
+    habits/
+      {YYYY-MM-DD}.json                  { v: 1, date, done: string[], loggedAt }
+    analytics/
+      {YYYY-MM-DD}.json                  AnalyticsDayLog — energy/mood/sleep + optional
+                                         hairFall/cycleMarker/notes
   grocery/
     {weekId}-list.csv                    RFC-4180 CSV — aggregated, sorted by category
     {weekId}-list.json                   JSON mirror with rows
   archive/
-    {year}.xlsx                          Yearly XLSX archive (planned, not yet implemented)
+    {year}.xlsx                          Yearly XLSX archive — built on demand via /api/archive
+                                         and auto-built on first accept of a new year
   exports/
     atomictracker-export-{date}.zip      User-triggered exports
   logs/
@@ -172,8 +272,13 @@ cookingDays: Day[]
 shoppingDay: Day
 shoppingTime: HH:MM
 mealtimes: { breakfast, lunch, dinner }
-defaultBreakfast?  defaultLunch?
+defaultBreakfast?  defaultLunch?       ← legacy fallback fields, AI-gen now produces B/L too
 favoriteMeals: string[]    favoriteIngredients: string[]
+heightCm? weightKg? age? sex?           ← body metrics, drives BMI + Mifflin-St Jeor targets
+activityLevel? goal?                    ← "sedentary"|"light"|... and "lose"|"maintain"|"gain"
+nutritionistNotes?: string              ← free-text, fed verbatim into the AI prompt
+symptoms?: string[]                     ← SYMPTOM_OPTIONS ids (hair-loss, fatigue, brain-fog…)
+snacksEnabled?: boolean                 ← toggles 4×7 (B/L/D + Snack) vs 3×7 generation
 reminderEventIds?: { fridayPlan?, sundayPrep?, weeklyShopping? }   ← created by /api/setup-reminders
 createdAt / updatedAt
 ```
@@ -185,23 +290,57 @@ weekId: "YYYY-Www"   weekStart / weekEnd: ISO date
 status: "draft" | "accepted"
 generatedAt / acceptedAt
 generatedBy: { provider, model }
-meals: Meal[]   (1-7 entries; cheatDay omitted)
-calendarEventIds: string[]   ← per-day B/L event IDs from /api/accept
-eventIdByDay: { [Day]: string }  ← per-day dinner event ID
-modifiedByDay: { [Day]: ISO }    ← set by /api/swap when plan was already accepted
+meals: Meal[]   (3-28 entries; one per (day, slot); cheatDay fully omitted)
+calendarEventIds: string[]   ← legacy admin/B/L event IDs (kept for back-compat)
+eventIdByDay: { [Day]: string }       ← legacy dinner-only map (still populated for back-compat)
+eventIdByDaySlot: { [`${Day}/${Slot}`]: string }   ← canonical map for slot-aware re-accept
+modifiedByDay: { [Day]: ISO }          ← set by /api/swap when plan was already accepted
+weekOverride?: WeekOverride            ← per-week override applied at generate time
 ```
 
 ### Meal
 ```
-day, name, cuisine, calories, macros, health_notes, instructions
+day, slot, name, cuisine, calories, macros, health_notes, instructions
+slot: "breakfast" | "lunch" | "dinner" | "snack"   ← optional on read (legacy plans → "dinner")
 ingredients: { name, qty, unit, category? }   category: produce|protein|dairy|grain|pantry|spice|frozen|other
 youtube_query: string
 recipe_url?: string                       YouTube search URL fallback (always set)
 recipe_video?: { id, title, channel, url }   top-result video (when YouTube key configured)
-recipe_alternatives?: RecipeVideo[]       up to 4 further videos (stored alongside recipe_video)
+recipe_alternatives?: RecipeVideo[]       up to 4 further videos
 storage?: string                          AI-generated: how to refrigerate/freeze after cooking
 reheat?: string                           AI-generated: how to reheat and serve
 locked?: boolean
+```
+
+### SupplementConfig (`lib/tracker/supplement-types.ts`)
+```
+v: 1
+supplements: Supplement[]               ← each: { id, name, dose?, catalogId?, timesPerDay,
+                                          rule: TimingRule, reminderEventIds? }
+TimingRule: { hints?: TimingHint[], avoidTags?: AvoidTag[],
+              gapMinutesFrom?: { tag, minutes }[], selfTags?: AvoidTag[] }
+TimingHint: empty-stomach | before-food | with-food | after-food | with-fat |
+            morning | bedtime | any-time
+AvoidTag: calcium | iron | thyroid | tea-coffee | magnesium | vitamin-c | fiber-meal
+createdAt / updatedAt
+```
+
+### HabitConfig (`lib/tracker/habit-types.ts`)
+```
+v: 1
+habits: Habit[]                          ← each: { id, name, cadence, weeklyDay?, customDays?,
+                                          tags?, reminderEventIds?, catalogId? }
+cadence: "daily" | "weekdays" | "weekly" | "custom"
+remindersEnabled: boolean
+createdAt / updatedAt
+```
+
+### AnalyticsDayLog (`lib/tracker/analytics-types.ts`)
+```
+v: 1, date, energy?, mood?, sleepHours?, hairFall?, cycleMarker?, notes, loggedAt
+energy/mood: 1-5 scale       sleepHours: 0-14
+hairFall: low | moderate | heavy        ← weekly cadence
+cycleMarker: menstrual | follicular | ovulatory | luteal | spotting
 ```
 
 ### connectors.enc.json plaintext (after decrypt)
@@ -237,11 +376,12 @@ We use direct `fetch` to Drive v3 + Calendar v3. The package is too heavy for Ve
 - Don't add `googleapis`. Don't broaden the OAuth scope without a strong reason.
 
 ### Calendar event tracking — IMPORTANT
-The schema for who-owns-which-event was iterated several times. The current model (post commit 16):
-- **Recurring admin events** (Friday plan / Sunday prep / weekly shopping) → IDs on `tracker.meal-planner.json` `reminderEventIds`. Created/refreshed via `POST /api/setup-reminders`. **Never created by `/api/accept`** (used to be — caused duplicates).
-- **Per-day dinner events** → IDs on `MealPlan.eventIdByDay[day]`. Created by `/api/accept`. Deleted+recreated on full re-accept or partial re-accept (`onlyDays`).
-- **Per-day breakfast/lunch events (Mon-Fri)** → IDs on `MealPlan.calendarEventIds` (flat list). Created by `/api/accept` if `config.defaultBreakfast` / `defaultLunch` is set. Deleted+recreated on full re-accept (not partial).
+The schema for who-owns-which-event was iterated several times. The current model:
+- **Recurring meal-planner admin events** (Friday plan / Sunday prep / weekly shopping) → IDs on `tracker.meal-planner.json` `reminderEventIds`. Created/refreshed via `POST /api/setup-reminders`. **Never created by `/api/accept`** (used to be — caused duplicates).
+- **Per-(day, slot) meal events** → IDs on `MealPlan.eventIdByDaySlot["${day}/${slot}"]`. Created by `/api/accept`. Deleted+recreated on full re-accept or partial re-accept (`onlyDays`). The legacy `MealPlan.eventIdByDay[day]` map is also still populated for the dinner slot to keep older code paths working.
 - **Prep check-in events** → IDs on `prep.json.calendarEventIds`. Created by `/api/prep`. Re-submission deletes-and-recreates.
+- **Per-supplement daily-recurring events** → IDs on each `Supplement.reminderEventIds`. Created by `POST /api/supplements/setup-reminders`. RRULE `FREQ=DAILY`. Idempotent re-run deletes prior IDs and re-creates.
+- **Per-habit recurring events (optional)** → IDs on each `Habit.reminderEventIds`. Created by `POST /api/habits/setup-reminders` only when `HabitConfig.remindersEnabled` is true. RRULE per cadence: `DAILY` for daily, `WEEKLY;BYDAY=MO,TU,WE,TH,FR` for weekdays, `WEEKLY;BYDAY=<day>` for weekly/custom.
 
 If you add a new Calendar event, **store its ID somewhere persistent** so re-accept / re-submit can clean up. Otherwise duplicates pile up.
 
@@ -261,43 +401,65 @@ If you add a new Calendar event, **store its ID somewhere persistent** so re-acc
 
 ## Commit log (high-signal recent)
 
+The repo has a long log; only the high-signal recent commits are listed. Run `git log --oneline -30` for the full picture.
+
 | Commit  | Title |
 |---------|-------|
 | f396544 | scaffold next.js + tailwind + ts + pwa |
 | 3d8a285 | nextauth google login (drive.file + calendar.events) |
-| c987e99 | drive folder bootstrap + settings + encryption passphrase |
-| 8a72067 | connector wizard for claude/openai/gemini |
-| b5ad584 | tracker picker + meal-planner config wizard |
 | 968afd8 | ai meal-plan generation against saved provider key |
-| cd09144 | fix: bump gemini model to 2.5-flash |
 | 41a7eb6 | per-meal lock + swap, regenerate-with-locks |
 | a1f1b2d | chat panel + acceptance flow (grocery csv + recurring calendar) |
 | abc1abe | sunday prep check-in flow |
 | 73018e3 | data export (zip mirror) |
-| f0004a2 | dark theme + sticky shell + cooking freq + cheat day + prep autofill |
 | 15eebc4 | switch palette to github primer colors |
-| 658e240 | dark-mode contrast + lucide-react icons (no more emojis) |
-| d275cf4 | re-accept overwrites calendar events instead of duplicating |
-| d3546d4 | multi-week home + overwrite confirm + thorough dark-mode audit |
-| 546064c | youtube two links + grouped grocery + per-day re-accept + week-card fix |
-| 6f188e8 | aggregate grocery, one-time recurring reminders, B/L on accept, schedule step |
-| 1a38321 | feat: 9 UX fixes — recipe alts, grocery groups, weekly prep, storage/reheat |
-| c5d4521 | updated code |
+| 6f188e8 | aggregate grocery, one-time recurring reminders, B/L on accept |
+| 1a38321 | 9 UX fixes — recipe alts, grocery groups, weekly prep, storage/reheat |
+| 71bde27 | yearly XLSX archive endpoint + plan save without calendar side-effects |
+| eb46c84 | fix: schedule step crash on old configs + UI polish |
+| 6137063 | feat: body metrics, BMI + daily targets, nutritionist notes, weekly override |
+| 9a2044b | perf: per-request memoize Drive layout + config; parallelize page loads |
+| 01bc78c | feat(phase1-3): Supplement Scheduler + Habit Tracker + B/L/D/Snacks meals |
+| 64a0311 | feat(phase4-5): Daily Timeline + Analytics & Insights |
+| 5e96a0a | feat(phase6): adherence-aware AI prompt + cycle-based nutrition + print CSS |
+| d485f29 | feat(phase7): registry-driven Trackers picker |
 
 ## Pending / TODO
 
-These are unfinished pieces. Low → high priority within each section:
+These are unfinished pieces. Most of the original Phase-2 backlog was shipped in the seven-phase health-and-wellness expansion (commits `01bc78c` → `d485f29`). What remains:
 
 ### Bugs / rough edges
 - **Stale recurring reminders from older accepts.** Existing users have admin events on Calendar from before commit `6f188e8` moved them out. The new `/api/setup-reminders` won't see those (their IDs aren't in the new `reminderEventIds`). Users have to manually delete the dupes once. A one-time info notice is shown on the meal planner home when `reminderEventIds` is not yet configured.
 
-### Bigger features
+### External-integration features (each needs its own setup flow + auth)
 - **Telegram bot** — paste BotFather token in Settings, mirror chat in Telegram, accept/swap from chat commands. Plan in PLAN.md §6 Phase 2.
-- **OpenClaw setup wizard** — recurring tasks via user's local OpenClaw gateway; multi-platform messaging bridge. Plan in PLAN.md §8.4.
-- **Real ordering deep-links** — Walmart Open API + Amazon PA-API for product disambiguation (vs current search URLs). Phase 3.
-- **Yearly XLSX archive** — `POST /api/archive { year }` is implemented. Auto-trigger on first accept of a new year is not yet wired (call the route manually from Settings or Dashboard).
-- **Tracker abstraction** — refactor `Tracker` as a plug-in interface; add a second tracker (e.g. workout planner) to validate. PLAN.md §13.
-- **Granular ingredient editing** — per-ingredient swap/add/remove on plan review.
+- **OpenClaw setup wizard** — recurring tasks via user's local OpenClaw gateway; multi-platform messaging bridge (WhatsApp/Discord/Slack/Signal). Plan in PLAN.md §8.4.
+- **Claude Code Routine setup wizard** — alternative for paid Claude users. PLAN.md §8.2.
+
+### Phase-3 ordering integrations
+- **Walmart Open API** + **Amazon PA-API** for product disambiguation (vs the current search-URL-only fallback).
+- **DoorDash DashMart** deep-link cart prefill.
+
+### Validation of the tracker abstraction
+- **Second concrete tracker** (e.g. Workout Planner) using `lib/tracker/registry.ts`. The registry pattern shipped in Phase 7; a second active tracker would validate it end-to-end. Workout/Finance placeholders are already shown in the picker.
+
+### Already shipped — recorded so future agents don't re-build them
+- ✅ Body metrics (height, weight, age, sex, activity, goal) + BMI + Mifflin-St Jeor daily targets
+- ✅ Nutritionist notes free-text field
+- ✅ Symptoms multi-select (hair-loss, fatigue, brain-fog, irregular-cycle, etc.)
+- ✅ B/L/D + optional snacks AI generation (slot-aware swap/regenerate/accept)
+- ✅ Indian carb staples (poha, dalia, ragi, idli, dosa, millets) in CUISINE_INGREDIENTS
+- ✅ Per-week override (cuisines / ingredients / kcal / notes) in GenerateClient
+- ✅ Supplement Scheduler tracker with conflict-aware solver
+- ✅ Habit Tracker with cadence-aware streaks
+- ✅ Daily Timeline view fusing meals + supplements + habits (+ printable mode)
+- ✅ Analytics + Insights (daily energy/mood/sleep, optional hairFall/cycle, 7 hand-coded insight rules)
+- ✅ AI prompt adherence-aware + cycle-phase nutrition guidance
+- ✅ Yearly XLSX archive — `POST /api/archive { year }` + Settings UI button + auto-trigger on first accept of a new year
+- ✅ Tracker registry — `lib/tracker/registry.ts`, drives `app/trackers/page.tsx`
+- ✅ Granular ingredient editing on plan review (PlanClient `addIngredient` / `removeIngredient`)
+- ✅ Favorite meals as first-class — heart toggle on meal cards + Favorites manager on the meal-planner home
+- ✅ Per-request `cache()` memoization for `auth()`, `readAtomicTrackerLayout`, `ensureAtomicTrackerLayout`, `readMealPlannerConfig`, etc.
 
 ## Working with this repo
 

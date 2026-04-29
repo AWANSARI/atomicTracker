@@ -15,6 +15,15 @@ import {
   type MealPlan,
   type Day,
 } from "@/lib/tracker/meal-planner-plan";
+import {
+  findFile,
+  listFolderChildren,
+  readJson,
+  uploadBinary,
+} from "@/lib/google/drive";
+
+const XLSX_MIME =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 // ─── Column helpers ──────────────────────────────────────────────────────────
 
@@ -216,4 +225,101 @@ export async function buildYearlyArchiveXlsx(plans: MealPlan[]): Promise<Uint8Ar
   });
 
   return buffer;
+}
+
+// ─── Drive orchestration helper ──────────────────────────────────────────────
+
+export type ArchiveResult =
+  | { ok: true; year: number; planCount: number; driveFileId: string; webViewLink: string }
+  | { ok: false; reason: "no_plans"; year: number };
+
+/**
+ * Walk /AtomicTracker/history/meals/, gather every accepted plan whose weekId
+ * starts with `year`, build the XLSX, and upload (or overwrite) it into the
+ * archive folder. Used by both POST /api/archive and the auto-trigger inside
+ * /api/accept that fires on the first accept of a new year.
+ *
+ * Throws on Drive / XLSX failures so callers can decide whether to surface
+ * the error (archive route) or swallow it (accept route best-effort).
+ */
+export async function buildAndUploadYearlyArchive(
+  accessToken: string,
+  year: number,
+  mealsFolderId: string,
+  archiveFolderId: string,
+): Promise<ArchiveResult> {
+  const children = await listFolderChildren(accessToken, mealsFolderId);
+  const accepted = children.filter((c) => /^\d{4}-W\d{2}\.json$/.test(c.name));
+
+  const yearStr = String(year);
+  const plans: MealPlan[] = [];
+  for (const file of accepted) {
+    let plan: MealPlan;
+    try {
+      plan = await readJson<MealPlan>(accessToken, file.id);
+    } catch {
+      continue;
+    }
+    if (
+      plan.status === "accepted" &&
+      typeof plan.weekId === "string" &&
+      plan.weekId.startsWith(yearStr)
+    ) {
+      plans.push(plan);
+    }
+  }
+
+  if (plans.length === 0) {
+    return { ok: false, reason: "no_plans", year };
+  }
+
+  const raw = await buildYearlyArchiveXlsx(plans);
+  const xlsxBuf = new ArrayBuffer(raw.byteLength);
+  new Uint8Array(xlsxBuf).set(raw);
+
+  const archiveName = `${year}.xlsx`;
+  const existingFileId = await findFile(accessToken, archiveName, archiveFolderId);
+
+  let driveFileId: string;
+  let webViewLink: string;
+
+  if (existingFileId) {
+    const res = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media&fields=id,webViewLink`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": XLSX_MIME,
+        },
+        body: xlsxBuf,
+      },
+    );
+    if (!res.ok) {
+      const errBody = await res.text();
+      throw new Error(`Drive update failed (${res.status}): ${errBody}`);
+    }
+    const data = (await res.json()) as { id?: string; webViewLink?: string };
+    driveFileId = data.id ?? existingFileId;
+    webViewLink =
+      data.webViewLink ?? `https://drive.google.com/file/d/${driveFileId}/view`;
+  } else {
+    const result = await uploadBinary(
+      accessToken,
+      archiveFolderId,
+      archiveName,
+      xlsxBuf,
+      XLSX_MIME,
+    );
+    driveFileId = result.id;
+    webViewLink = result.webViewLink;
+  }
+
+  return {
+    ok: true,
+    year,
+    planCount: plans.length,
+    driveFileId,
+    webViewLink,
+  };
 }

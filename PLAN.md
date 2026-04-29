@@ -7,7 +7,7 @@
 **AI:** BYOK chooser — Anthropic Claude / OpenAI / Google Gemini
 **Multi-user:** Yes, from day one
 **Project-owned state:** None. Everything lives in the user's Drive or in their own Claude/Telegram account.
-**Plan status:** v3 + Phase 1 shipped (commits 1–10 on `main`). Live at https://atomictracker.vercel.app. Phase 2 next.
+**Plan status:** Phase 1 shipped + a seven-phase health-and-wellness expansion built on top (Supplement Scheduler, Habit Tracker, Daily Timeline, Analytics & Insights, adherence-aware AI, registry-driven Trackers picker, body metrics + symptoms). Live at https://atomictracker.vercel.app. CLAUDE.md is the authoritative agent handoff; this PLAN.md is the original design record kept for context.
 
 ---
 

@@ -15,6 +15,7 @@ import {
   type MealPlan,
 } from "@/lib/tracker/meal-planner-plan";
 import { readMealPlannerConfig } from "@/app/trackers/meal-planner/actions";
+import { buildAndUploadYearlyArchive } from "@/lib/tracker/xlsx-archive";
 
 export const maxDuration = 60;
 const APP_VERSION = "0.1.0";
@@ -342,6 +343,56 @@ export async function POST(req: Request) {
     });
   }
 
+  // 4. Auto-trigger prior-year archive on first accept of a new year.
+  // Best-effort: never block the accept response on archive failure.
+  // Trigger window: W01 or W02 of the new year (some years' first ISO week
+  // technically falls in late December — being generous here).
+  let archiveTrigger:
+    | { attempted: true; ok: boolean; year: number; webViewLink?: string; error?: string }
+    | { attempted: false }
+    = { attempted: false };
+  if (!partial) {
+    const weekIdMatch = weekId.match(/^(\d{4})-W(\d{2})$/);
+    if (weekIdMatch) {
+      const yearNum = Number(weekIdMatch[1]);
+      const weekNum = Number(weekIdMatch[2]);
+      if ((weekNum === 1 || weekNum === 2) && yearNum >= 2001 && yearNum <= 2100) {
+        const priorYear = yearNum - 1;
+        const archiveFolderId = layout.folderIds["archive"];
+        if (archiveFolderId) {
+          try {
+            const existingArchive = await findFile(
+              session.accessToken,
+              `${priorYear}.xlsx`,
+              archiveFolderId,
+            );
+            if (!existingArchive) {
+              const result = await buildAndUploadYearlyArchive(
+                session.accessToken,
+                priorYear,
+                mealsFolderId,
+                archiveFolderId,
+              );
+              archiveTrigger = {
+                attempted: true,
+                ok: result.ok,
+                year: priorYear,
+                ...(result.ok ? { webViewLink: result.webViewLink } : {}),
+              };
+            }
+          } catch (e) {
+            archiveTrigger = {
+              attempted: true,
+              ok: false,
+              year: priorYear,
+              error: e instanceof Error ? e.message : String(e),
+            };
+          }
+        }
+      }
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     weekId,
@@ -359,6 +410,7 @@ export async function POST(req: Request) {
       deleted: deletionResults,
     },
     reaccept: previousAdminEventIds.length > 0 || previousIds.length > 0,
+    archive: archiveTrigger,
   });
 }
 

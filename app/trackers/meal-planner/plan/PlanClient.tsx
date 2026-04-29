@@ -6,6 +6,7 @@ import {
   Check,
   ClipboardCheck,
   Flame,
+  Heart,
   Loader2,
   Lock,
   LockOpen,
@@ -31,6 +32,7 @@ import {
   type Slot,
 } from "@/lib/tracker/meal-planner-plan";
 import { buildGroceryRows, groupGroceryRows } from "@/lib/tracker/grocery";
+import { toggleFavoriteMeal } from "../actions";
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 
@@ -68,13 +70,20 @@ async function getKey(googleSub: string) {
 export function PlanClient({
   initialPlan,
   googleSub,
+  initialFavoriteMeals,
 }: {
   initialPlan: MealPlan;
   googleSub: string;
+  initialFavoriteMeals: string[];
 }) {
   const [plan, setPlan] = useState<MealPlan>(initialPlan);
   const [busyDay, setBusyDay] = useState<Day | "all" | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Local mirror of the user's favoriteMeals list. Optimistically updated when
+  // the user taps the heart on a meal card; rolled back on server error.
+  const [favorites, setFavorites] = useState<string[]>(initialFavoriteMeals);
+  const [favBusy, setFavBusy] = useState<string | null>(null);
 
   // Ingredient editing state
   const [dirtyDays, setDirtyDays] = useState<Set<Day>>(new Set());
@@ -105,6 +114,32 @@ export function PlanClient({
         m.day === day ? { ...m, locked: !m.locked } : m,
       ),
     }));
+  }
+
+  async function toggleFavorite(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || favBusy === trimmed) return;
+    const wasFavorite = favorites.includes(trimmed);
+    // Optimistic update — flip immediately so the heart fills/empties without
+    // waiting for the server roundtrip.
+    setFavorites((prev) =>
+      wasFavorite ? prev.filter((n) => n !== trimmed) : [...prev, trimmed],
+    );
+    setFavBusy(trimmed);
+    try {
+      const updated = await toggleFavoriteMeal(trimmed);
+      setFavorites(updated);
+    } catch (e) {
+      // Roll back the optimistic flip on failure.
+      setFavorites((prev) =>
+        wasFavorite
+          ? [...prev, trimmed]
+          : prev.filter((n) => n !== trimmed),
+      );
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFavBusy(null);
+    }
   }
 
   function onIngredientChange(day: Day, newIngredients: Ingredient[]) {
@@ -366,9 +401,12 @@ export function PlanClient({
               busy={busyDay === m.day || busyDay === "all"}
               syncing={syncingDay === m.day}
               isStaleOnCalendar={isStaleOnCalendar}
+              isFavorite={favorites.includes(m.name.trim())}
+              favoriteBusy={favBusy === m.name.trim()}
               onLock={() => toggleLock(m.day)}
               onSwap={() => swapDay(m.day)}
               onSync={() => syncDay(m.day)}
+              onToggleFavorite={() => toggleFavorite(m.name)}
               dirty={dirtyDays.has(m.day)}
               saving={savingState[m.day] ?? null}
               onIngredientChange={(newIngredients) =>
@@ -693,9 +731,12 @@ function MealCard({
   busy,
   syncing,
   isStaleOnCalendar,
+  isFavorite,
+  favoriteBusy,
   onLock,
   onSwap,
   onSync,
+  onToggleFavorite,
   dirty,
   saving,
   onIngredientChange,
@@ -705,9 +746,12 @@ function MealCard({
   busy: boolean;
   syncing: boolean;
   isStaleOnCalendar: boolean;
+  isFavorite: boolean;
+  favoriteBusy: boolean;
   onLock: () => void;
   onSwap: () => void;
   onSync: () => void;
+  onToggleFavorite: () => void;
   dirty: boolean;
   saving: "saving" | "saved" | null;
   onIngredientChange: (newIngredients: Ingredient[]) => void;
@@ -731,6 +775,28 @@ function MealCard({
           </h3>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggleFavorite}
+            disabled={favoriteBusy}
+            aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            aria-pressed={isFavorite}
+            title={
+              isFavorite
+                ? "Remove from favorites"
+                : "Add to favorites — the AI will include this when reasonable"
+            }
+            className={`grid h-8 w-8 place-items-center rounded-md transition ${
+              isFavorite
+                ? "bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60"
+                : "border border-slate-200 bg-white text-slate-400 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:hover:bg-slate-800"
+            } disabled:opacity-50`}
+          >
+            <Heart
+              className="h-3.5 w-3.5"
+              fill={isFavorite ? "currentColor" : "none"}
+            />
+          </button>
           <button
             type="button"
             onClick={onLock}

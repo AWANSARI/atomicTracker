@@ -107,3 +107,80 @@ export async function hasMealPlannerConfig(): Promise<boolean> {
   const config = await readMealPlannerConfig();
   return config != null;
 }
+
+// ─── Favorites mutations ──────────────────────────────────────────────────
+//
+// Small focused server actions used by the plan card "heart" toggle and the
+// Favorites manager on the meal-planner home. Each one reads the current
+// config, mutates the favoriteMeals/favoriteIngredients array, and writes
+// it back. They return the updated array so the client can reconcile state
+// without a full re-fetch.
+
+const norm = (s: string) => s.trim();
+
+async function mutateFavorites(
+  field: "favoriteMeals" | "favoriteIngredients",
+  fn: (current: string[]) => string[],
+): Promise<string[]> {
+  const { accessToken, googleSub } = await requireAuth();
+  const configId = await getConfigFolderId(accessToken, googleSub);
+  const existing = await readMealPlannerConfig();
+  if (!existing) {
+    throw new Error("Meal planner not configured yet");
+  }
+  const current = existing[field] ?? [];
+  const next = fn(current);
+  const now = new Date().toISOString();
+  const final: MealPlannerConfig = {
+    ...existing,
+    [field]: next,
+    updatedAt: now,
+  };
+  await upsertJson(accessToken, configId, CONFIG_FILE, final);
+  revalidatePath("/trackers/meal-planner");
+  return next;
+}
+
+/**
+ * Toggle a meal name in `favoriteMeals` — add if missing, remove if present.
+ * Case-sensitive match on trimmed input. Returns the updated list.
+ */
+export async function toggleFavoriteMeal(name: string): Promise<string[]> {
+  const v = norm(name);
+  if (!v) throw new Error("Empty name");
+  return mutateFavorites("favoriteMeals", (current) =>
+    current.includes(v) ? current.filter((n) => n !== v) : [...current, v],
+  );
+}
+
+export async function addFavoriteMeal(name: string): Promise<string[]> {
+  const v = norm(name);
+  if (!v) throw new Error("Empty name");
+  return mutateFavorites("favoriteMeals", (current) =>
+    current.includes(v) ? current : [...current, v],
+  );
+}
+
+export async function removeFavoriteMeal(name: string): Promise<string[]> {
+  const v = norm(name);
+  if (!v) throw new Error("Empty name");
+  return mutateFavorites("favoriteMeals", (current) =>
+    current.filter((n) => n !== v),
+  );
+}
+
+export async function addFavoriteIngredient(name: string): Promise<string[]> {
+  const v = norm(name);
+  if (!v) throw new Error("Empty name");
+  return mutateFavorites("favoriteIngredients", (current) =>
+    current.includes(v) ? current : [...current, v],
+  );
+}
+
+export async function removeFavoriteIngredient(name: string): Promise<string[]> {
+  const v = norm(name);
+  if (!v) throw new Error("Empty name");
+  return mutateFavorites("favoriteIngredients", (current) =>
+    current.filter((n) => n !== v),
+  );
+}
