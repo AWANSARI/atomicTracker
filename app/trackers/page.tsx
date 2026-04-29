@@ -4,14 +4,70 @@ import { hasMealPlannerConfig } from "./meal-planner/actions";
 import { hasSupplementConfig } from "./supplements/actions";
 import { hasHabitConfig } from "./habits/actions";
 import { AppShell } from "@/components/AppShell";
+import type {
+  TrackerPlaceholder,
+  TrackerRegistryEntry,
+} from "@/lib/tracker/registry";
+
+/**
+ * Live tracker registry. Each entry is rendered as a card on the picker.
+ * Adding a new tracker = appending to this array + dropping the matching
+ * /trackers/<id>/ folder. No other edits required here.
+ */
+const TRACKERS: TrackerRegistryEntry[] = [
+  {
+    id: "meal-planner",
+    title: "Weekly Meal Planner",
+    description:
+      "Plan a full week of breakfast / lunch / dinner / snacks with AI suggestions, ingredient lists, and Calendar reminders.",
+    configuredHint: "Configured · tap to view",
+    Icon: UtensilsCrossed,
+    href: "/trackers/meal-planner",
+    setupHref: "/trackers/meal-planner/setup",
+    isConfigured: hasMealPlannerConfig,
+  },
+  {
+    id: "supplements",
+    title: "Supplement Scheduler",
+    description:
+      "Track supplements & meds with conflict-aware timing (empty-stomach, 2-h gaps from iron / calcium) and Calendar reminders.",
+    configuredHint: "Configured · tap to view today's schedule",
+    Icon: Pill,
+    href: "/trackers/supplements",
+    setupHref: "/trackers/supplements/setup",
+    isConfigured: hasSupplementConfig,
+  },
+  {
+    id: "habits",
+    title: "Habit Tracker",
+    description:
+      "Daily non-negotiables with streaks and weekly consistency.",
+    configuredHint: "Configured · tap to check off today's habits",
+    Icon: Sprout,
+    href: "/trackers/habits",
+    setupHref: "/trackers/habits/setup",
+    isConfigured: hasHabitConfig,
+  },
+];
+
+const PLACEHOLDERS: TrackerPlaceholder[] = [
+  {
+    id: "workout",
+    title: "Workout Planner",
+    description: "Coming soon.",
+    Icon: Dumbbell,
+  },
+  {
+    id: "finance",
+    title: "Finance Tracker",
+    description: "Coming soon.",
+    Icon: Wallet,
+  },
+];
 
 export default async function TrackersPage() {
-  const [mealPlannerConfigured, supplementsConfigured, habitsConfigured] =
-    await Promise.all([
-      hasMealPlannerConfig(),
-      hasSupplementConfig(),
-      hasHabitConfig(),
-    ]);
+  // Fetch all isConfigured() probes in parallel (each is per-request memoized).
+  const statuses = await Promise.all(TRACKERS.map((t) => t.isConfigured()));
 
   return (
     <AppShell
@@ -20,67 +76,29 @@ export default async function TrackersPage() {
       backHref="/dashboard"
     >
       <section className="space-y-3">
-        <TrackerCard
-          href={
-            mealPlannerConfigured
-              ? "/trackers/meal-planner"
-              : "/trackers/meal-planner/setup"
-          }
-          Icon={UtensilsCrossed}
-          title="Weekly Meal Planner"
-          description={
-            mealPlannerConfigured
-              ? "Configured · tap to view"
-              : "Plan dinners for the week with AI suggestions, ingredient lists, and Calendar reminders."
-          }
-          status={mealPlannerConfigured ? "configured" : "available"}
-        />
+        {TRACKERS.map((t, i) => {
+          const configured = statuses[i] ?? false;
+          return (
+            <TrackerCard
+              key={t.id}
+              href={configured ? t.href : t.setupHref}
+              Icon={t.Icon}
+              title={t.title}
+              description={configured ? t.configuredHint : t.description}
+              status={configured ? "configured" : "available"}
+            />
+          );
+        })}
 
-        <TrackerCard
-          href={
-            supplementsConfigured
-              ? "/trackers/supplements"
-              : "/trackers/supplements/setup"
-          }
-          Icon={Pill}
-          title="Supplement Scheduler"
-          description={
-            supplementsConfigured
-              ? "Configured · tap to view today's schedule"
-              : "Track supplements & meds with conflict-aware timing and Calendar reminders."
-          }
-          status={supplementsConfigured ? "configured" : "available"}
-        />
-
-        <TrackerCard
-          href={
-            habitsConfigured
-              ? "/trackers/habits"
-              : "/trackers/habits/setup"
-          }
-          Icon={Sprout}
-          title="Habit Tracker"
-          description={
-            habitsConfigured
-              ? "Configured · tap to check off today's habits"
-              : "Daily non-negotiables with streaks and weekly consistency."
-          }
-          status={habitsConfigured ? "configured" : "available"}
-        />
-
-        <TrackerCard
-          Icon={Dumbbell}
-          title="Workout Planner"
-          description="Coming soon."
-          status="coming-soon"
-        />
-
-        <TrackerCard
-          Icon={Wallet}
-          title="Finance Tracker"
-          description="Coming soon."
-          status="coming-soon"
-        />
+        {PLACEHOLDERS.map((p) => (
+          <TrackerCard
+            key={p.id}
+            Icon={p.Icon}
+            title={p.title}
+            description={p.description}
+            status="coming-soon"
+          />
+        ))}
       </section>
 
       <p className="mt-8 text-center text-xs text-slate-400 dark:text-slate-500">
