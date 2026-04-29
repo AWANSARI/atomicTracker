@@ -82,12 +82,20 @@ export default async function MealPlannerHomePage() {
       subtitle={`Updated ${formatRelative(config.updatedAt)}`}
       backHref="/trackers"
       rightSlot={
-        <Link
-          href="/trackers/meal-planner/setup"
-          className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-        >
-          Edit
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/timeline?date=${isoDate(currentMonday)}&print=fridge`}
+            className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            Print
+          </Link>
+          <Link
+            href="/trackers/meal-planner/setup"
+            className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            Edit
+          </Link>
+        </div>
       }
     >
       {/* Configuration — collapsed by default, sits at the very top so it's

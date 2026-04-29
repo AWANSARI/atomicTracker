@@ -5,7 +5,14 @@ import {
   upsertJson,
 } from "@/lib/google/drive";
 import { readMealPlannerConfig } from "@/app/trackers/meal-planner/actions";
-import { buildMealPlannerPrompt } from "@/lib/tracker/meal-planner-prompt";
+import { readSupplementConfig } from "@/app/trackers/supplements/actions";
+import { readHabitConfig, readHabitLogsLast } from "@/app/trackers/habits/actions";
+import { readAnalyticsLogsLast } from "@/app/insights/actions";
+import {
+  buildAdherenceSummary,
+  buildMealPlannerPrompt,
+} from "@/lib/tracker/meal-planner-prompt";
+import { listFolderChildren, readJson } from "@/lib/google/drive";
 import { generateJson } from "@/lib/ai/generate";
 import {
   isoDate,
@@ -114,12 +121,20 @@ export async function POST(req: Request) {
   // TODO commit 7+: read recent history. For now, empty.
   const recentHistory: MealPlan[] = [];
 
+  // Adherence summary — bias the AI toward what the user actually does.
+  // Read in parallel; failure on any source falls back to undefined fields.
+  const adherence = await buildAdherenceForGenerate(
+    session.accessToken,
+    layoutPre.folderIds,
+  );
+
   const prompt = buildMealPlannerPrompt({
     config,
     recentHistory,
     weekStart,
     weekEnd: weekEndStr,
     override: body.weekOverride,
+    adherence,
   });
 
   // Call AI
@@ -200,4 +215,57 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ ok: true, plan });
+}
+
+/**
+ * Build an AdherenceSummary from the last 28 days of history for this user.
+ * Best-effort: if any source errors out we fall through with whatever we
+ * collected. Pure I/O; the prompt builder does the rest.
+ */
+async function buildAdherenceForGenerate(
+  accessToken: string,
+  folderIds: Record<string, string>,
+) {
+  const [habitConfig, supplementConfig, analyticsLogs, habitLogs] = await Promise.all([
+    readHabitConfig().catch(() => null),
+    readSupplementConfig().catch(() => null),
+    readAnalyticsLogsLast(28).catch(() => []),
+    readHabitLogsLast(28).catch(() => []),
+  ]);
+
+  // Supplement adherence: scan /history/supplements/{date}.json for last 28 days.
+  const supplementsFolderId = folderIds["history/supplements"];
+  let supplementLogs: { date: string; taken: Record<string, string> }[] = [];
+  if (supplementsFolderId) {
+    try {
+      const children = await listFolderChildren(accessToken, supplementsFolderId);
+      const cutoff = new Date();
+      cutoff.setUTCDate(cutoff.getUTCDate() - 28);
+      const cutoffIso = cutoff.toISOString().slice(0, 10);
+      const recent = children.filter((c) => /^\d{4}-\d{2}-\d{2}\.json$/.test(c.name) && c.name >= `${cutoffIso}.json`);
+      const docs = await Promise.all(
+        recent.map((c) =>
+          readJson<{ date: string; taken?: Record<string, string> }>(accessToken, c.id).catch(() => null),
+        ),
+      );
+      supplementLogs = docs
+        .filter((d): d is { date: string; taken?: Record<string, string> } => Boolean(d))
+        .map((d) => ({ date: d.date, taken: d.taken ?? {} }));
+    } catch {
+      // ignore — adherence is best-effort
+    }
+  }
+
+  const habitNames: Record<string, string> = {};
+  for (const h of habitConfig?.habits ?? []) habitNames[h.id] = h.name;
+  const supplementNames: Record<string, string> = {};
+  for (const s of supplementConfig?.supplements ?? []) supplementNames[s.id] = s.name;
+
+  return buildAdherenceSummary({
+    analytics: analyticsLogs,
+    habitLogs,
+    habitNames,
+    supplementLogs,
+    supplementNames,
+  });
 }

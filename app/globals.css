@@ -29,3 +29,28 @@ select,
 textarea {
   font-size: 16px;
 }
+
+/* Printable views — used by /timeline?print=fridge for fridge-sheet output. */
+@media print {
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+    color-scheme: light !important;
+  }
+  /* Hide app chrome — header, fixed bottom nav. */
+  nav[aria-label="Primary"] {
+    display: none !important;
+  }
+  /* Tables print compact, edge-to-edge. */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  /* Avoid splitting rows across pages. */
+  tr, li {
+    page-break-inside: avoid;
+  }
+  a[href]::after {
+    content: "";
+  }
+}

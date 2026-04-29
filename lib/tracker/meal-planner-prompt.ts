@@ -16,6 +16,135 @@ import {
   computeDailyTargets,
   goalLabel,
 } from "./nutrition";
+import type { AnalyticsDayLog, CycleMarker } from "./analytics-types";
+
+/**
+ * Lightweight summary of the user's recent adherence and self-reported state.
+ * Computed by the API route from history files and fed into the AI prompt
+ * so the next plan can adjust to what the user actually does. All fields are
+ * optional — when absent the prompt just doesn't reference them.
+ */
+export type AdherenceSummary = {
+  /** How many of the last 7 plan-days had ≥1 logged "done" action (any tracker). */
+  daysActiveLast7?: number;
+  /** Average self-reported energy (1-5) over last 7 days, if any. */
+  avgEnergyLast7?: number;
+  /** Average self-reported sleep hours over last 7 days, if any. */
+  avgSleepHoursLast7?: number;
+  /** Habits the user has missed for ≥3 of the last 7 days. */
+  recentlySkippedHabits?: string[];
+  /** Supplement IDs the user has missed for ≥3 of the last 7 days. */
+  recentlyMissedSupplements?: string[];
+  /** Most recent cycle marker logged (drives cycle-based nutrition phrasing). */
+  latestCycleMarker?: CycleMarker;
+  /** Date of latestCycleMarker, ISO. */
+  latestCycleMarkerDate?: string;
+};
+
+/**
+ * Build an AdherenceSummary from raw log arrays. Defensive — empty inputs
+ * yield an empty summary (no fields set). Pure; safe to call from server
+ * routes before building the prompt.
+ */
+export function buildAdherenceSummary(input: {
+  analytics: AnalyticsDayLog[];
+  habitLogs: { date: string; done: string[] }[];
+  habitNames: Record<string, string>;
+  supplementLogs: { date: string; taken: Record<string, string> }[];
+  supplementNames: Record<string, string>;
+}): AdherenceSummary {
+  const out: AdherenceSummary = {};
+  // 7-day cutoff (UTC).
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const last7Iso = new Set<string>();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setUTCDate(today.getUTCDate() - i);
+    last7Iso.add(d.toISOString().slice(0, 10));
+  }
+
+  // Active-day count.
+  const activeDays = new Set<string>();
+  for (const h of input.habitLogs) {
+    if (last7Iso.has(h.date) && h.done.length > 0) activeDays.add(h.date);
+  }
+  for (const s of input.supplementLogs) {
+    if (last7Iso.has(s.date) && Object.keys(s.taken).length > 0) {
+      activeDays.add(s.date);
+    }
+  }
+  if (activeDays.size > 0) out.daysActiveLast7 = activeDays.size;
+
+  // Energy + sleep averages.
+  const recentAnalytics = input.analytics.filter((a) => last7Iso.has(a.date));
+  const energyScores: number[] = [];
+  for (const a of recentAnalytics) {
+    if (typeof a.energy === "number") energyScores.push(a.energy);
+  }
+  if (energyScores.length >= 3) {
+    out.avgEnergyLast7 =
+      Math.round((energyScores.reduce((s, n) => s + n, 0) / energyScores.length) * 10) / 10;
+  }
+  const sleepHours: number[] = [];
+  for (const a of recentAnalytics) {
+    if (typeof a.sleepHours === "number") sleepHours.push(a.sleepHours);
+  }
+  if (sleepHours.length >= 3) {
+    out.avgSleepHoursLast7 =
+      Math.round((sleepHours.reduce((s, n) => s + n, 0) / sleepHours.length) * 10) / 10;
+  }
+
+  // Habit/supplement misses — naive: count days a habit/supp was NOT in the
+  // done set. Caller should pass habitNames / supplementNames so we can
+  // resolve IDs into human-readable strings for the prompt.
+  const habitMissCounts: Record<string, number> = {};
+  for (const id of Object.keys(input.habitNames)) habitMissCounts[id] = 0;
+  for (const day of last7Iso) {
+    const log = input.habitLogs.find((h) => h.date === day);
+    const done = new Set(log?.done ?? []);
+    for (const id of Object.keys(input.habitNames)) {
+      if (!done.has(id)) habitMissCounts[id] = (habitMissCounts[id] ?? 0) + 1;
+    }
+  }
+  const missedHabits: string[] = [];
+  for (const [id, n] of Object.entries(habitMissCounts)) {
+    if ((n ?? 0) >= 3) {
+      const name = input.habitNames[id];
+      if (name) missedHabits.push(name);
+    }
+  }
+  if (missedHabits.length > 0) out.recentlySkippedHabits = missedHabits;
+
+  const suppMissCounts: Record<string, number> = {};
+  for (const id of Object.keys(input.supplementNames)) suppMissCounts[id] = 0;
+  for (const day of last7Iso) {
+    const log = input.supplementLogs.find((s) => s.date === day);
+    const taken = new Set(Object.keys(log?.taken ?? {}));
+    for (const id of Object.keys(input.supplementNames)) {
+      if (!taken.has(id)) suppMissCounts[id] = (suppMissCounts[id] ?? 0) + 1;
+    }
+  }
+  const missedSupps: string[] = [];
+  for (const [id, n] of Object.entries(suppMissCounts)) {
+    if ((n ?? 0) >= 3) {
+      const name = input.supplementNames[id];
+      if (name) missedSupps.push(name);
+    }
+  }
+  if (missedSupps.length > 0) out.recentlyMissedSupplements = missedSupps;
+
+  // Latest cycle marker — use most-recent (by date) analytics entry that has one.
+  const cyclesByDateDesc = [...input.analytics]
+    .filter((a) => a.cycleMarker)
+    .sort((a, b) => (a.date > b.date ? -1 : 1));
+  if (cyclesByDateDesc.length > 0 && cyclesByDateDesc[0]) {
+    out.latestCycleMarker = cyclesByDateDesc[0].cycleMarker;
+    out.latestCycleMarkerDate = cyclesByDateDesc[0].date;
+  }
+
+  return out;
+}
 
 /**
  * Per-week customization that overrides the saved config for THIS generation
@@ -61,10 +190,13 @@ export function buildMealPlannerPrompt(args: {
   weekEnd: string;
   /** Optional per-week override (cuisines, ingredients, notes, kcal). */
   override?: WeekOverride;
+  /** Optional adherence + self-report summary; biases the AI toward what
+   * the user actually does. */
+  adherence?: AdherenceSummary;
 }): string {
   const baseConfig = args.config;
   const config = applyWeekOverride(baseConfig, args.override);
-  const { recentHistory, weekStart, weekEnd, override } = args;
+  const { recentHistory, weekStart, weekEnd, override, adherence } = args;
 
   const dietLabels = [
     ...config.diets.map((id) => labelOf(ALL_DIETS, id)),
@@ -167,6 +299,45 @@ export function buildMealPlannerPrompt(args: {
 ${override.notes ? `  Notes: ${override.notes}` : ""}${override.caloriesPerDay ? `\n  Per-day kcal target: ${override.caloriesPerDay}` : ""}${override.diets ? `\n  Diets (override): ${override.diets.join(", ") || "(any)"}` : ""}${override.cuisines ? `\n  Cuisines (override): ${[...override.cuisines, ...(override.customCuisines ?? [])].join(", ") || "(any)"}` : ""}${override.ingredients ? `\n  Pantry (override): ${[...override.ingredients, ...(override.customIngredients ?? [])].join(", ") || "(use common ingredients)"}` : ""}`
       : "";
 
+  // Adherence: bias the AI toward what the user actually does. Emit only
+  // when at least one signal is present; an empty summary stays silent.
+  const adherenceLines: string[] = [];
+  if (typeof adherence?.daysActiveLast7 === "number") {
+    adherenceLines.push(
+      `  Active days last 7: ${adherence.daysActiveLast7}/7 — ${adherence.daysActiveLast7 < 4 ? "low engagement; favor faster, simpler dishes that are realistic to actually finish" : "good engagement; can include occasional more involved batch-cook dishes"}`,
+    );
+  }
+  if (typeof adherence?.avgEnergyLast7 === "number") {
+    adherenceLines.push(
+      `  Avg energy last 7: ${adherence.avgEnergyLast7}/5 — ${adherence.avgEnergyLast7 < 3 ? "lean into iron-rich foods (leafy greens, dates, dal) and B-vitamin sources" : "stable, no special bias needed"}`,
+    );
+  }
+  if (typeof adherence?.avgSleepHoursLast7 === "number" && adherence.avgSleepHoursLast7 < 6.5) {
+    adherenceLines.push(
+      `  Avg sleep last 7: ${adherence.avgSleepHoursLast7}h — limit caffeine/spicy/heavy late meals; prefer magnesium-rich evening foods (pumpkin seeds, almonds, banana)`,
+    );
+  }
+  if (adherence?.recentlySkippedHabits?.length) {
+    adherenceLines.push(
+      `  Habits frequently skipped: ${adherence.recentlySkippedHabits.join(", ")} — work the underlying foods directly into meals when possible (e.g. if "soaked nuts" is skipped, include nuts in breakfast)`,
+    );
+  }
+  if (adherence?.recentlyMissedSupplements?.length) {
+    adherenceLines.push(
+      `  Supplements frequently missed: ${adherence.recentlyMissedSupplements.join(", ")} — emphasize food sources for the same nutrients (iron → spinach/dal/dates; B12 → eggs/dairy; magnesium → seeds/leafy greens)`,
+    );
+  }
+  const adherenceBlock = adherenceLines.length
+    ? `\n\nRECENT ADHERENCE & SELF-REPORT (use to bias choices; never call out by name in health_notes)\n${adherenceLines.join("\n")}`
+    : "";
+
+  // Cycle-based nutrition. Only meaningful if the user has cycle tracking
+  // enabled (their latest log has a cycleMarker). Each phase has known
+  // nutritional emphases — we feed those into the prompt.
+  const cycleBlock = adherence?.latestCycleMarker
+    ? `\n\nCYCLE PHASE (current — based on user's latest log ${adherence.latestCycleMarkerDate ?? ""})\n  Phase: ${adherence.latestCycleMarker}\n${cyclePhaseGuidance(adherence.latestCycleMarker)}`
+    : "";
+
   return `You are a thoughtful meal-planning assistant. Generate a full daily-meal plan for the week of ${weekStart} through ${weekEnd}: exactly ${mealCount} entries — one per (day, slot) combination across these days [${dayList}] and these slots [${slotList}]. Snacks are ${config.snacksEnabled ? "INCLUDED" : "NOT INCLUDED"} this week.
 
 ${config.cheatDay ? `IMPORTANT: ${config.cheatDay} is the user's cheat day — do NOT generate ANY meals for ${config.cheatDay} (no breakfast, no lunch, no dinner, no snack). The output array should NOT include any entry with day = "${config.cheatDay}".\n` : ""}USER PROFILE
@@ -177,7 +348,7 @@ ${config.cheatDay ? `IMPORTANT: ${config.cheatDay} is the user's cheat day — d
   Pantry — primary ingredients to use: ${ingredients.length ? ingredients.join(", ") : "(no specific pantry — use common ingredients)"}
   Max repeats per dish in this week: ${config.repeatsPerWeek}
   Cooking pattern: ${cookingNote || "Not specified"} — generate dishes that match this pace. Larger batch portions if cooking less frequently.
-  Favorite meals (include if reasonable): ${config.favoriteMeals.length ? config.favoriteMeals.join(", ") : "(none yet)"}${bodyBlock}${nutritionBlock}${nutritionistBlock}${overrideBlock}
+  Favorite meals (include if reasonable): ${config.favoriteMeals.length ? config.favoriteMeals.join(", ") : "(none yet)"}${bodyBlock}${nutritionBlock}${nutritionistBlock}${overrideBlock}${adherenceBlock}${cycleBlock}
 
 RECENT HISTORY (avoid repeating identical dishes from the previous 4 weeks)
 ${historyLines}
@@ -223,6 +394,24 @@ Return ONLY valid JSON. No markdown fences, no prose before or after. Schema:
 }`;
 }
 
+/** Phase-specific nutritional emphases for cycle-based meal planning. */
+function cyclePhaseGuidance(phase: CycleMarker): string {
+  if (phase === "menstrual") {
+    return "  Emphasis: warming foods, iron-rich (spinach, dal, dates, red meat if applicable), hydration, magnesium for cramps (dark chocolate, pumpkin seeds). Avoid heavy salt, alcohol, excess caffeine.";
+  }
+  if (phase === "follicular") {
+    return "  Emphasis: lighter, fresh foods supporting estrogen build-up — sprouted lentils, fermented foods (idli, dosa, kimchi), probiotics, fresh fruits, leafy greens. Higher energy phase, can include slightly more carb-forward dishes.";
+  }
+  if (phase === "ovulatory") {
+    return "  Emphasis: anti-inflammatory foods, B-vitamins (eggs, leafy greens, whole grains), zinc (pumpkin seeds, chickpeas), antioxidant-rich produce. Lighter cooking methods.";
+  }
+  if (phase === "luteal") {
+    return "  Emphasis: complex carbs (oats, sweet potato, millets) for serotonin stability, magnesium (almonds, dark leafy greens), B6 (banana, chickpeas), iron prep for next menstrual phase. Reduce salt + caffeine to ease bloating + mood swings.";
+  }
+  // spotting / unknown
+  return "  Emphasis: gentle, easy-to-digest foods. Hydration. Iron-rich if spotting indicates light flow.";
+}
+
 function labelOf(options: { id: string; label: string }[], id: string): string {
   return options.find((o) => o.id === id)?.label ?? id;
 }
@@ -239,6 +428,7 @@ export function buildSwapPrompt(args: {
   /** Optional: which slot to swap. Defaults to "dinner" for back-compat. */
   slotToSwap?: "breakfast" | "lunch" | "dinner" | "snack";
   override?: WeekOverride;
+  adherence?: AdherenceSummary;
 }): string {
   const slot = args.slotToSwap ?? "dinner";
   const base = buildMealPlannerPrompt({
@@ -247,6 +437,7 @@ export function buildSwapPrompt(args: {
     weekStart: args.weekStart,
     weekEnd: args.weekEnd,
     override: args.override,
+    adherence: args.adherence,
   });
   const otherMeals = args.currentPlan.meals
     .filter((m) => !(m.day === args.dayToSwap && (m.slot ?? "dinner") === slot))
@@ -337,6 +528,7 @@ export function buildRegeneratePrompt(args: {
   currentPlan: MealPlan;
   lockedDays: string[];
   override?: WeekOverride;
+  adherence?: AdherenceSummary;
 }): string {
   const base = buildMealPlannerPrompt({
     config: args.config,
@@ -344,6 +536,7 @@ export function buildRegeneratePrompt(args: {
     weekStart: args.weekStart,
     weekEnd: args.weekEnd,
     override: args.override,
+    adherence: args.adherence,
   });
   // Locked meals are matched by day (legacy locks) or by `${day}/${slot}` keys
   // — when slotToSwap is unspecified we treat all of that day's meals as locked.
