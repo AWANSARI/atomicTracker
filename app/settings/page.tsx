@@ -3,6 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { PassphraseSection } from "./PassphraseSection";
 import { ConnectorWizard } from "./ConnectorWizard";
 import { YouTubeKeySection } from "./YouTubeKeySection";
+import { TelegramSection } from "./TelegramSection";
 import { DataExport } from "./DataExport";
 import { ArchiveSection } from "./ArchiveSection";
 
@@ -67,11 +68,18 @@ export default async function SettingsPage() {
       </Section>
 
       <Section
+        title="Telegram bot"
+        description="Optional. Receive AtomicTracker nudges directly in Telegram (e.g. plan-accepted, prep-due). Outbound only — bot commands are not yet supported."
+      >
+        <TelegramSection googleSub={googleSub} />
+      </Section>
+
+      <Section
         title="Other connectors"
-        description="Telegram, OpenClaw, Claude Routine — wizards arrive in later commits."
+        description="OpenClaw, Claude Routine — wizards arrive in later commits."
       >
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Nothing connected yet.
+          Nothing else connected yet.
         </p>
       </Section>
 
