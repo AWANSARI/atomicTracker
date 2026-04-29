@@ -24,7 +24,7 @@ export function AppShell({
 }) {
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-slate-50/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-[#0d1117]/90">
         <div className="mx-auto flex max-w-md items-center gap-3 px-6 py-3">
           {backHref ? (
             <Link
@@ -70,7 +70,7 @@ function BottomNav() {
     <nav
       role="navigation"
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
+      className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-[#0d1117]/95"
     >
       <div className="mx-auto flex max-w-md items-center justify-around px-6 py-2">
         <NavItem href="/dashboard" label="Home" icon="🏠" />

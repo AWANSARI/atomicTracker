@@ -7,11 +7,13 @@
 }
 
 html, body {
-  background-color: #f8fafc; /* slate-50 */
+  background-color: #ffffff; /* GitHub canvas (light) */
+  color: #1f2328;            /* GitHub fg.default (light) */
 }
 @media (prefers-color-scheme: dark) {
   html, body {
-    background-color: #020617; /* slate-950 */
+    background-color: #0d1117; /* GitHub canvas (dark) */
+    color: #e6edf3;            /* GitHub fg.default (dark) */
   }
 }
 
