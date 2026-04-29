@@ -5,6 +5,7 @@ import { ConnectorWizard } from "./ConnectorWizard";
 import { YouTubeKeySection } from "./YouTubeKeySection";
 import { DataExport } from "./DataExport";
 import { ArchiveSection } from "./ArchiveSection";
+import { RoutineSection } from "./RoutineSection";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -87,6 +88,13 @@ export default async function SettingsPage() {
         description="Generate a single XLSX with every accepted plan from a chosen year. Auto-runs once on the first accept of each new year; rebuild on demand here."
       >
         <ArchiveSection />
+      </Section>
+
+      <Section
+        title="Claude Code Routine"
+        description="Schedule weekly meal-plan generation from a Claude Code Routine (or any external scheduler). Mints an opaque dispatch URL you paste into the routine config — no live session needed."
+      >
+        <RoutineSection />
       </Section>
     </AppShell>
   );
