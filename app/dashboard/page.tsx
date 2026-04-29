@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, Minus, MoreHorizontal, UtensilsCrossed } from "lucide-react";
+import { Activity, CalendarRange, Check, Minus, MoreHorizontal, UtensilsCrossed } from "lucide-react";
 import { auth, signOut } from "@/auth";
 import { findFile, readAtomicTrackerLayout } from "@/lib/google/drive";
 import { bootstrapDriveFolder } from "./actions";
@@ -143,6 +143,51 @@ export default async function DashboardPage() {
             </p>
           </div>
         )}
+      </section>
+
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Today
+        </h2>
+        <Link
+          href="/timeline"
+          className="mt-3 flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-brand-400 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-brand-600 dark:hover:bg-slate-800"
+        >
+          <div
+            aria-hidden
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+          >
+            <CalendarRange className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+              Daily timeline
+            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Meals, supplements, and habits fused into one chronological day view.
+            </p>
+          </div>
+        </Link>
+
+        <Link
+          href="/insights"
+          className="mt-3 flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:border-brand-400 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-brand-600 dark:hover:bg-slate-800"
+        >
+          <div
+            aria-hidden
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+          >
+            <Activity className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+              Insights
+            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Patterns from energy, sleep, habits, and meal adherence over the last 4 weeks.
+            </p>
+          </div>
+        </Link>
       </section>
 
       <section className="mt-8">

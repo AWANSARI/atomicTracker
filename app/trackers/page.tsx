@@ -71,21 +71,21 @@ export default async function TrackersPage() {
         <TrackerCard
           Icon={Dumbbell}
           title="Workout Planner"
-          description="Coming after Phase 1."
+          description="Coming soon."
           status="coming-soon"
         />
 
         <TrackerCard
           Icon={Wallet}
           title="Finance Tracker"
-          description="Coming after Phase 1."
+          description="Coming soon."
           status="coming-soon"
         />
       </section>
 
       <p className="mt-8 text-center text-xs text-slate-400 dark:text-slate-500">
-        Trackers are designed as plug-ins. The first one (meal planner)
-        validates the pattern; more arrive once Phase 1 ships.
+        Each tracker stores its own data in your Drive. Set up one or all of
+        them — the Daily Timeline fuses whichever you have.
       </p>
     </AppShell>
   );

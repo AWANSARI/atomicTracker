@@ -30,6 +30,7 @@ const SUBFOLDERS = [
   "history/photos",
   "history/supplements",
   "history/habits",
+  "history/analytics",
   "grocery",
   "archive",
   "exports",
