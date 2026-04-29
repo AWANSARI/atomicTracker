@@ -538,8 +538,13 @@ function AcceptedSummary({
                   : "border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40"
               }`}
             >
-              <span className={ev.ok ? "text-slate-700 dark:text-slate-300" : "text-red-900 dark:text-red-300"}>
-                {ev.ok ? "✓" : "✗"} {ev.name}
+              <span className={`inline-flex items-center gap-1.5 ${ev.ok ? "text-slate-700 dark:text-slate-300" : "text-red-900 dark:text-red-300"}`}>
+                {ev.ok ? (
+                  <Check className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
+                ) : (
+                  <X className="h-3 w-3 shrink-0 text-red-600 dark:text-red-400" strokeWidth={3} />
+                )}
+                {ev.name}
               </span>
               {ev.ok && ev.htmlLink ? (
                 <a

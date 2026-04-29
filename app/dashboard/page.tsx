@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { UtensilsCrossed } from "lucide-react";
+import { Check, Minus, MoreHorizontal, UtensilsCrossed } from "lucide-react";
 import { auth, signOut } from "@/auth";
 import { findFile, readAtomicTrackerLayout } from "@/lib/google/drive";
 import { bootstrapDriveFolder } from "./actions";
@@ -93,9 +93,9 @@ export default async function DashboardPage() {
             }
           />
           <ConnectionRow
-            label="Calendar (calendar.events)"
+            label="Calendar"
             status="connected"
-            note="Used by Friday/Sunday reminders in commit 5"
+            note="Used for plan reminders, prep check-ins, and weekly shopping"
           />
           <ConnectionRow
             label="AI provider"
@@ -187,22 +187,6 @@ export default async function DashboardPage() {
         </Link>
       </section>
 
-      <section className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-        <p className="font-medium text-slate-900 dark:text-slate-50">Phase 1 is live</p>
-        <p className="mt-2">
-          Sign-in, encrypted connector store, AI plan generation (Claude /
-          OpenAI / Gemini), per-meal lock + swap, regenerate-with-locks, chat
-          panel, accept flow with grocery CSV and Calendar reminders, Sunday
-          prep check-in, and data export are all shipped. See{" "}
-          <a
-            href="https://github.com/AWANSARI/atomicTracker/blob/main/PLAN.md"
-            className="font-medium text-brand-700 underline-offset-2 hover:underline dark:text-brand-400"
-          >
-            PLAN.md
-          </a>{" "}
-          for the Phase 2 roadmap (OpenClaw, Telegram, ordering deep-links).
-        </p>
-      </section>
     </AppShell>
   );
 }
@@ -216,19 +200,21 @@ function ConnectionRow({
   status: "connected" | "pending" | "not-connected";
   note?: string;
 }) {
-  const styles = {
-    connected: { bg: "bg-emerald-500", glyph: "✓" },
-    pending: { bg: "bg-amber-500", glyph: "…" },
-    "not-connected": { bg: "bg-slate-300 dark:bg-slate-700", glyph: "—" },
-  } as const;
-  const s = styles[status];
+  const Icon =
+    status === "connected" ? Check : status === "pending" ? MoreHorizontal : Minus;
+  const bg =
+    status === "connected"
+      ? "bg-emerald-500"
+      : status === "pending"
+        ? "bg-amber-500"
+        : "bg-slate-300 dark:bg-slate-700";
   return (
     <li className="flex items-start gap-3 rounded-md border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
       <span
-        className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ${s.bg}`}
+        className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white ${bg}`}
         aria-hidden
       >
-        {s.glyph}
+        <Icon className="h-3 w-3" strokeWidth={3} />
       </span>
       <div className="min-w-0">
         <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{label}</p>

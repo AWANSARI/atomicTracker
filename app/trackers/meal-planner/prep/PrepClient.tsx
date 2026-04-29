@@ -1,7 +1,17 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Camera, Check, Image as ImageIcon, Loader2, X } from "lucide-react";
+import {
+  Camera,
+  Check,
+  Coffee,
+  Image as ImageIcon,
+  Loader2,
+  Salad,
+  UtensilsCrossed,
+  X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { DAYS, type Day, type Meal, type MealPlan } from "@/lib/tracker/meal-planner-plan";
 
 type Slot = "breakfast" | "lunch" | "dinner";
@@ -30,10 +40,10 @@ type SubmitResult = {
   events?: { name: string; ok: boolean; htmlLink?: string; error?: string }[];
 };
 
-const SLOT_META: Record<Slot, { label: string; emoji: string }> = {
-  breakfast: { label: "Breakfast", emoji: "☕" },
-  lunch: { label: "Lunch", emoji: "🥗" },
-  dinner: { label: "Dinner", emoji: "🍽" },
+const SLOT_META: Record<Slot, { label: string; Icon: LucideIcon }> = {
+  breakfast: { label: "Breakfast", Icon: Coffee },
+  lunch: { label: "Lunch", Icon: Salad },
+  dinner: { label: "Dinner", Icon: UtensilsCrossed },
 };
 
 /**
@@ -219,13 +229,18 @@ export function PrepClient({
                   }`}
                 >
                   <span
-                    className={
+                    className={`inline-flex items-center gap-1.5 ${
                       ev.ok
                         ? "text-slate-700 dark:text-slate-300"
                         : "text-red-900 dark:text-red-300"
-                    }
+                    }`}
                   >
-                    {ev.ok ? "✓" : "✗"} {ev.name}
+                    {ev.ok ? (
+                      <Check className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
+                    ) : (
+                      <X className="h-3 w-3 shrink-0 text-red-600 dark:text-red-400" strokeWidth={3} />
+                    )}
+                    {ev.name}
                   </span>
                   {ev.ok && ev.htmlLink ? (
                     <a
@@ -472,8 +487,9 @@ function SlotRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            {meta.emoji} {meta.label}
+          <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <meta.Icon className="h-3 w-3 shrink-0" />
+            {meta.label}
             {hint ? (
               <span className="ml-1 text-[10px] font-normal text-slate-400 dark:text-slate-500">
                 · {hint}

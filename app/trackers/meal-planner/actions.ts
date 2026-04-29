@@ -40,7 +40,30 @@ export async function readMealPlannerConfig(): Promise<MealPlannerConfig | null>
   const fileId = await findFile(accessToken, CONFIG_FILE, configId);
   if (!fileId) return null;
   try {
-    return await readJson<MealPlannerConfig>(accessToken, fileId);
+    const raw = await readJson<Partial<MealPlannerConfig>>(accessToken, fileId);
+    // Merge with defaults so older saved configs missing newer fields don't
+    // produce undefined values that crash UI code (e.g. cookingDays.includes).
+    const defaults = emptyMealPlannerConfig();
+    return {
+      ...defaults,
+      ...raw,
+      mealtimes: { ...defaults.mealtimes, ...(raw.mealtimes ?? {}) },
+      diets: raw.diets ?? [],
+      healthConditions: raw.healthConditions ?? [],
+      allergies: raw.allergies ?? [],
+      customAllergies: raw.customAllergies ?? [],
+      cuisines: raw.cuisines ?? [],
+      customCuisines: raw.customCuisines ?? [],
+      ingredients: raw.ingredients ?? [],
+      customIngredients: raw.customIngredients ?? [],
+      favoriteMeals: raw.favoriteMeals ?? [],
+      favoriteIngredients: raw.favoriteIngredients ?? [],
+      cookingDays: raw.cookingDays ?? defaults.cookingDays,
+      shoppingDay: raw.shoppingDay ?? defaults.shoppingDay,
+      shoppingTime: raw.shoppingTime ?? defaults.shoppingTime,
+      createdAt: raw.createdAt ?? defaults.createdAt,
+      updatedAt: raw.updatedAt ?? defaults.updatedAt,
+    };
   } catch {
     return null;
   }

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Check } from "lucide-react";
 import { saveMealPlannerConfig } from "../actions";
 import {
   ALL_DIETS,
@@ -43,9 +44,31 @@ export function MealPlannerWizard({
   const [step, setStep] = useState<Step>(0);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [config, setConfig] = useState<MealPlannerConfig>(
-    initialConfig ?? emptyMealPlannerConfig(),
-  );
+  const [config, setConfig] = useState<MealPlannerConfig>(() => {
+    const defaults = emptyMealPlannerConfig();
+    if (!initialConfig) return defaults;
+    // Merge loaded config over defaults so older saved configs missing newer
+    // fields (e.g. cookingDays, shoppingDay, shoppingTime, mealtimes) don't
+    // crash the wizard with "cannot read properties of undefined".
+    return {
+      ...defaults,
+      ...initialConfig,
+      mealtimes: { ...defaults.mealtimes, ...(initialConfig.mealtimes ?? {}) },
+      cookingDays: initialConfig.cookingDays ?? defaults.cookingDays,
+      shoppingDay: initialConfig.shoppingDay ?? defaults.shoppingDay,
+      shoppingTime: initialConfig.shoppingTime ?? defaults.shoppingTime,
+      diets: initialConfig.diets ?? [],
+      healthConditions: initialConfig.healthConditions ?? [],
+      allergies: initialConfig.allergies ?? [],
+      customAllergies: initialConfig.customAllergies ?? [],
+      cuisines: initialConfig.cuisines ?? [],
+      customCuisines: initialConfig.customCuisines ?? [],
+      ingredients: initialConfig.ingredients ?? [],
+      customIngredients: initialConfig.customIngredients ?? [],
+      favoriteMeals: initialConfig.favoriteMeals ?? [],
+      favoriteIngredients: initialConfig.favoriteIngredients ?? [],
+    };
+  });
 
   function update<K extends keyof MealPlannerConfig>(key: K, value: MealPlannerConfig[K]) {
     setConfig((c) => ({ ...c, [key]: value }));
@@ -279,7 +302,9 @@ function Stepper({ step }: { step: number }) {
                 : "border border-slate-200 bg-white text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-500"
           }`}
         >
-          <span>{i < step ? "✓" : i + 1}</span>
+          <span className="inline-flex items-center justify-center">
+            {i < step ? <Check className="h-3 w-3" strokeWidth={3} /> : i + 1}
+          </span>
           <span>{label}</span>
         </div>
       ))}

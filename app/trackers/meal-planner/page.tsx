@@ -91,7 +91,7 @@ export default async function MealPlannerHomePage() {
               tap to expand
             </span>
           </summary>
-          <dl className="mt-3 space-y-2 text-sm">
+          <dl className="mt-3 text-sm">
             <Row
               label="Diet"
               value={
@@ -205,7 +205,7 @@ function labelOf(options: { id: string; label: string }[], id: string): string {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
+    <div className="flex items-start justify-between gap-4 border-b border-slate-100 py-2 last:border-b-0 dark:border-slate-800">
       <dt className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {label}
       </dt>
