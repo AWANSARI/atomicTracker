@@ -53,6 +53,12 @@ export type Meal = {
   recipe_url?: string;
   /** Specific top-result video, populated when a YouTube key is configured. */
   recipe_video?: RecipeVideo;
+  /** Up to 4 alternative recipe videos for the same dish (when key configured). */
+  recipe_alternatives?: RecipeVideo[];
+  /** How to freeze/refrigerate the meal once cooked. AI-generated. */
+  storage?: string;
+  /** How to reheat and serve. AI-generated. */
+  reheat?: string;
   /** Optional client-side state (carried in JSON for resilience). */
   locked?: boolean;
 };

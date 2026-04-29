@@ -6,21 +6,36 @@ import {
   readJson,
   upsertJson,
 } from "@/lib/google/drive";
-import { addMinutes, createEvent, deleteEvent, localDateTime } from "@/lib/google/calendar";
-import { readMealPlannerConfig } from "@/app/trackers/meal-planner/actions";
 import {
-  type Day,
-  type MealPlan,
-} from "@/lib/tracker/meal-planner-plan";
+  addMinutes,
+  createEvent,
+  deleteEvent,
+  localDateTime,
+} from "@/lib/google/calendar";
+import { readMealPlannerConfig } from "@/app/trackers/meal-planner/actions";
+import { type Day, type MealPlan } from "@/lib/tracker/meal-planner-plan";
 
 export const maxDuration = 60;
 const APP_VERSION = "0.1.0";
 const VALID_DAYS: Day[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_OFFSETS: Record<Day, number> = {
-  Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6,
+  Mon: 0,
+  Tue: 1,
+  Wed: 2,
+  Thu: 3,
+  Fri: 4,
+  Sat: 5,
+  Sun: 6,
 };
-// Mon-Fri offsets, used for breakfast/lunch scheduling
+// Mon-Fri offsets, used as the legacy fallback for breakfast/lunch
 const WEEKDAYS: Day[] = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+
+type Slot = "breakfast" | "lunch" | "dinner";
+type SlotEntry = {
+  name: string;
+  photo?: { fileId: string; viewUrl: string };
+};
+type DayEntry = Partial<Record<Slot, SlotEntry>>;
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -30,10 +45,13 @@ export async function POST(req: Request) {
 
   let body: {
     weekId?: string;
+    timezone?: string;
+    /** New structured payload: per-day breakfast/lunch/dinner with optional photos. */
+    days?: Record<string, DayEntry>;
+    /** Legacy fields (still honored if `days` is missing). */
     prepped?: string[];
     breakfast?: string;
     lunch?: string;
-    timezone?: string;
   };
   try {
     body = await req.json();
@@ -42,11 +60,6 @@ export async function POST(req: Request) {
   }
 
   const weekId = body.weekId;
-  const prepped = (body.prepped ?? []).filter((d): d is Day =>
-    VALID_DAYS.includes(d as Day),
-  );
-  const breakfast = (body.breakfast ?? "").trim();
-  const lunch = (body.lunch ?? "").trim();
   const timezone =
     typeof body.timezone === "string" && body.timezone ? body.timezone : "UTC";
 
@@ -92,8 +105,57 @@ export async function POST(req: Request) {
     );
   }
 
-  // 0. If a previous prep submission exists for this week, delete its events
-  // so re-submission overwrites cleanly (no duplicate B/L/D entries).
+  // ── Normalize the payload ────────────────────────────────────────────────
+  // Prefer the new `days` structure. If absent, synthesize it from legacy
+  // fields (prepped + breakfast + lunch) so older clients still work.
+  const days: Partial<Record<Day, DayEntry>> = {};
+  if (body.days && typeof body.days === "object") {
+    for (const [k, v] of Object.entries(body.days)) {
+      if (!VALID_DAYS.includes(k as Day)) continue;
+      if (!v || typeof v !== "object") continue;
+      const entry: DayEntry = {};
+      for (const slot of ["breakfast", "lunch", "dinner"] as Slot[]) {
+        const s = (v as DayEntry)[slot];
+        if (!s || typeof s.name !== "string" || !s.name.trim()) continue;
+        entry[slot] = {
+          name: s.name.trim(),
+          photo:
+            s.photo && typeof s.photo.fileId === "string"
+              ? { fileId: s.photo.fileId, viewUrl: String(s.photo.viewUrl) }
+              : undefined,
+        };
+      }
+      if (Object.keys(entry).length > 0) days[k as Day] = entry;
+    }
+  } else {
+    const prepped = (body.prepped ?? []).filter((d): d is Day =>
+      VALID_DAYS.includes(d as Day),
+    );
+    const breakfastName = (body.breakfast ?? "").trim();
+    const lunchName = (body.lunch ?? "").trim();
+    for (const d of prepped) {
+      const meal = plan.meals.find((m) => m.day === d);
+      const entry: DayEntry = {};
+      if (meal) entry.dinner = { name: meal.name };
+      days[d] = entry;
+    }
+    if (breakfastName) {
+      for (const d of WEEKDAYS) {
+        const e = days[d] ?? {};
+        e.breakfast = { name: breakfastName };
+        days[d] = e;
+      }
+    }
+    if (lunchName) {
+      for (const d of WEEKDAYS) {
+        const e = days[d] ?? {};
+        e.lunch = { name: lunchName };
+        days[d] = e;
+      }
+    }
+  }
+
+  // ── Delete previous events from this week's prep submission, if any ──────
   const existingPrepFileId = await findFile(
     session.accessToken,
     `${weekId}-prep.json`,
@@ -125,83 +187,106 @@ export async function POST(req: Request) {
     }
   }
 
-  // Build the calendar events
+  // ── Build calendar events ────────────────────────────────────────────────
   const weekStartDate = new Date(plan.weekStart + "T00:00:00Z");
-  const events: { name: string; ok: boolean; htmlLink?: string; error?: string }[] = [];
+  const events: {
+    name: string;
+    ok: boolean;
+    htmlLink?: string;
+    error?: string;
+  }[] = [];
   const newEventIds: string[] = [];
 
-  // 1. Dinner events for prepped days
-  for (const day of prepped) {
-    const meal = plan.meals.find((m) => m.day === day);
-    if (!meal) continue;
-    const dayDate = new Date(weekStartDate);
-    dayDate.setUTCDate(weekStartDate.getUTCDate() + DAY_OFFSETS[day]);
-    const start = localDateTime(dayDate, config.mealtimes.dinner, timezone);
-    const end = localDateTime(
-      dayDate,
-      addMinutes(config.mealtimes.dinner, 60),
-      timezone,
-    );
-    try {
-      const ev = await createEvent(session.accessToken, {
-        summary: `🍽️ ${meal.name}`,
-        description: [
-          `${meal.cuisine} · ${meal.calories} kcal`,
-          `Macros — P ${meal.macros.protein_g}g / C ${meal.macros.carbs_g}g / F ${meal.macros.fat_g}g / Fib ${meal.macros.fiber_g}g`,
-          "",
-          meal.health_notes,
-          "",
-          `Ingredients:`,
-          ...meal.ingredients.map((i) => `  • ${i.qty} ${i.unit} ${i.name}`),
-          "",
-          `Instructions: ${meal.instructions}`,
-          ...(meal.recipe_url ? ["", `Recipe video: ${meal.recipe_url}`] : []),
-        ].join("\n"),
-        start,
-        end,
-        reminders: {
-          useDefault: false,
-          overrides: [{ method: "popup", minutes: 30 }],
-        },
-        ...(meal.recipe_url
-          ? { source: { title: "Recipe video", url: meal.recipe_url } }
-          : {}),
-      });
-      newEventIds.push(ev.id);
-      events.push({ name: `${day} · ${meal.name}`, ok: true, htmlLink: ev.htmlLink });
-    } catch (e) {
-      events.push({
-        name: `${day} · ${meal.name}`,
-        ok: false,
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
-  }
+  const SLOT_TIME: Record<Slot, () => string> = {
+    breakfast: () => config.mealtimes.breakfast,
+    lunch: () => config.mealtimes.lunch,
+    dinner: () => config.mealtimes.dinner,
+  };
+  const SLOT_DURATION: Record<Slot, number> = {
+    breakfast: 30,
+    lunch: 30,
+    dinner: 60,
+  };
+  const SLOT_EMOJI: Record<Slot, string> = {
+    breakfast: "☕",
+    lunch: "🥗",
+    dinner: "🍽",
+  };
 
-  // 2. Breakfast events Mon-Fri (if provided)
-  if (breakfast) {
-    for (const day of WEEKDAYS) {
+  for (const day of VALID_DAYS) {
+    const dayEntry = days[day];
+    if (!dayEntry) continue;
+    for (const slot of ["breakfast", "lunch", "dinner"] as Slot[]) {
+      const entry = dayEntry[slot];
+      if (!entry) continue;
       const dayDate = new Date(weekStartDate);
       dayDate.setUTCDate(weekStartDate.getUTCDate() + DAY_OFFSETS[day]);
-      const start = localDateTime(dayDate, config.mealtimes.breakfast, timezone);
+      const startTime = SLOT_TIME[slot]();
+      const start = localDateTime(dayDate, startTime, timezone);
       const end = localDateTime(
         dayDate,
-        addMinutes(config.mealtimes.breakfast, 30),
+        addMinutes(startTime, SLOT_DURATION[slot]),
         timezone,
       );
+
+      // Pull dinner-meal context (storage/reheat/etc.) if available so the
+      // event description is rich, not just a name.
+      const dinnerMeal =
+        slot === "dinner" ? plan.meals.find((m) => m.day === day) : null;
+      const descParts: string[] = [];
+      descParts.push(
+        `${slot.charAt(0).toUpperCase() + slot.slice(1)} — scheduled via AtomicTracker prep check-in.`,
+      );
+      if (dinnerMeal) {
+        descParts.push(
+          "",
+          `${dinnerMeal.cuisine} · ${dinnerMeal.calories} kcal`,
+          `Macros — P ${dinnerMeal.macros.protein_g}g / C ${dinnerMeal.macros.carbs_g}g / F ${dinnerMeal.macros.fat_g}g / Fib ${dinnerMeal.macros.fiber_g}g`,
+        );
+        if (dinnerMeal.health_notes) descParts.push("", dinnerMeal.health_notes);
+        if (dinnerMeal.storage)
+          descParts.push("", `Store: ${dinnerMeal.storage}`);
+        if (dinnerMeal.reheat) descParts.push(`Reheat: ${dinnerMeal.reheat}`);
+        if (dinnerMeal.recipe_video?.url)
+          descParts.push(
+            "",
+            `Recipe: ${dinnerMeal.recipe_video.title} — ${dinnerMeal.recipe_video.url}`,
+          );
+      }
+      if (entry.photo?.viewUrl) {
+        descParts.push("", `📷 Photo: ${entry.photo.viewUrl}`);
+      }
+
       try {
         const ev = await createEvent(session.accessToken, {
-          summary: `☕ ${breakfast}`,
-          description: "Breakfast — scheduled via AtomicTracker prep check-in.",
+          summary: `${SLOT_EMOJI[slot]} ${entry.name}`,
+          description: descParts.join("\n"),
           start,
           end,
-          reminders: { useDefault: false },
+          reminders: {
+            useDefault: false,
+            overrides: [{ method: "popup", minutes: 30 }],
+          },
+          ...(entry.photo?.viewUrl
+            ? { source: { title: "Photo", url: entry.photo.viewUrl } }
+            : dinnerMeal?.recipe_video?.url
+              ? {
+                  source: {
+                    title: "Recipe video",
+                    url: dinnerMeal.recipe_video.url,
+                  },
+                }
+              : {}),
         });
         newEventIds.push(ev.id);
-        events.push({ name: `${day} · breakfast`, ok: true, htmlLink: ev.htmlLink });
+        events.push({
+          name: `${day} · ${slot} · ${entry.name}`,
+          ok: true,
+          htmlLink: ev.htmlLink,
+        });
       } catch (e) {
         events.push({
-          name: `${day} · breakfast`,
+          name: `${day} · ${slot} · ${entry.name}`,
           ok: false,
           error: e instanceof Error ? e.message : String(e),
         });
@@ -209,46 +294,17 @@ export async function POST(req: Request) {
     }
   }
 
-  // 3. Lunch events Mon-Fri (if provided)
-  if (lunch) {
-    for (const day of WEEKDAYS) {
-      const dayDate = new Date(weekStartDate);
-      dayDate.setUTCDate(weekStartDate.getUTCDate() + DAY_OFFSETS[day]);
-      const start = localDateTime(dayDate, config.mealtimes.lunch, timezone);
-      const end = localDateTime(
-        dayDate,
-        addMinutes(config.mealtimes.lunch, 30),
-        timezone,
-      );
-      try {
-        const ev = await createEvent(session.accessToken, {
-          summary: `🥗 ${lunch}`,
-          description: "Lunch — scheduled via AtomicTracker prep check-in.",
-          start,
-          end,
-          reminders: { useDefault: false },
-        });
-        newEventIds.push(ev.id);
-        events.push({ name: `${day} · lunch`, ok: true, htmlLink: ev.htmlLink });
-      } catch (e) {
-        events.push({
-          name: `${day} · lunch`,
-          ok: false,
-          error: e instanceof Error ? e.message : String(e),
-        });
-      }
-    }
-  }
-
-  // 4. Save prep state to /history/meals/{weekId}-prep.json — including the
-  // new event IDs so a future re-submission can delete these events first.
+  // ── Save prep state ──────────────────────────────────────────────────────
+  // Backwards compatible: keep `prepped` for older readers, and also the
+  // structured `days` so the next visit can re-hydrate the form.
   try {
     await upsertJson(session.accessToken, mealsFolderId, `${weekId}-prep.json`, {
-      v: 1,
+      v: 2,
       weekId,
-      prepped,
-      breakfast: breakfast || undefined,
-      lunch: lunch || undefined,
+      prepped: VALID_DAYS.filter((d) => days[d]?.dinner),
+      breakfast: days.Mon?.breakfast?.name,
+      lunch: days.Mon?.lunch?.name,
+      days,
       submittedAt: new Date().toISOString(),
       timezone,
       calendarEventIds: newEventIds,

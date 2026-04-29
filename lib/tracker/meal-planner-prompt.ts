@@ -91,6 +91,8 @@ GUIDELINES
 - Use ingredients from the user's pantry preferentially; supplement with common pantry items only when needed.
 - For youtube_query, write a concrete search query that would surface a credible recipe video. Include the cuisine and dish name. Avoid generic terms.
 - For each ingredient, set "category" to one of: "produce", "protein", "dairy", "grain", "pantry", "spice", "frozen", "other". This is used to group items in the user's grocery list. Examples: tomato/onion/spinach -> produce; chicken/lamb/tofu/eggs/lentils -> protein; milk/yogurt/paneer/cheese/butter -> dairy; rice/pasta/bread/oats -> grain; oil/sauce/flour/sugar -> pantry; cumin/turmeric/garlic powder -> spice; frozen peas/corn -> frozen.
+- For "storage": one short sentence describing how to refrigerate AND/OR freeze the cooked meal to keep it fresh — include container hint and approximate shelf life. Example: "Cool, then refrigerate in airtight container 3-4 days, or freeze flat in zip bags up to 2 months."
+- For "reheat": one short sentence describing the best way to reheat — note microwave vs stovetop vs oven, any added liquid, target temperature, and a serving tip. Example: "Reheat from frozen: thaw overnight, then warm gently on stovetop with a splash of water 5-7 min until steaming. Top with fresh herbs."
 
 OUTPUT
 Return ONLY valid JSON. No markdown fences, no prose before or after. Schema:
@@ -108,7 +110,9 @@ Return ONLY valid JSON. No markdown fences, no prose before or after. Schema:
         { "name": "paneer", "qty": "200", "unit": "g", "category": "dairy" }
       ],
       "instructions": "2-3 sentences of cooking steps. Not a full recipe.",
-      "youtube_query": "palak paneer authentic recipe restaurant style"
+      "youtube_query": "palak paneer authentic recipe restaurant style",
+      "storage": "Refrigerate in airtight container 3-4 days, or freeze flat in zip bags up to 2 months.",
+      "reheat": "Thaw overnight in fridge, then warm on stovetop with a splash of water 5-7 min. Garnish with fresh cilantro."
     }
     // ${mealCount} entries total, day fields in order: ${dayList}
   ]
@@ -159,7 +163,9 @@ OUTPUT — return ONLY this JSON shape (no array, no fences, no prose):
     "health_notes": "...",
     "ingredients": [ { "name": "...", "qty": "...", "unit": "..." } ],
     "instructions": "...",
-    "youtube_query": "..."
+    "youtube_query": "...",
+    "storage": "...",
+    "reheat": "..."
   }
 }`;
 }

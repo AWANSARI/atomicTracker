@@ -78,8 +78,83 @@ export default async function MealPlannerHomePage() {
         </Link>
       }
     >
-      {/* Two week cards — current week (already started) + next week (focus of planning). */}
-      <section className="space-y-4">
+      {/* Configuration — collapsed by default, sits at the very top so it's
+          easy to glance at but doesn't push the actionable week cards below
+          the fold. */}
+      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <details>
+          <summary className="flex cursor-pointer items-center justify-between gap-2">
+            <span className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Configuration
+            </span>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+              tap to expand
+            </span>
+          </summary>
+          <dl className="mt-3 space-y-2 text-sm">
+            <Row
+              label="Diet"
+              value={
+                [
+                  ...config.diets.map((id) => labelOf(ALL_DIETS, id)),
+                  config.customDiet,
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "—"
+              }
+            />
+            <Row
+              label="Health"
+              value={
+                [
+                  ...config.healthConditions.map((id) =>
+                    labelOf(HEALTH_OPTIONS, id),
+                  ),
+                  config.customHealth,
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "—"
+              }
+            />
+            <Row
+              label="Allergies"
+              value={
+                [
+                  ...config.allergies.map((id) =>
+                    labelOf(COMMON_ALLERGIES, id),
+                  ),
+                  ...config.customAllergies,
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "None"
+              }
+            />
+            <Row
+              label="Cuisines"
+              value={
+                [
+                  ...config.cuisines.map((id) => labelOf(CUISINES, id)),
+                  ...config.customCuisines,
+                ].join(", ") || "—"
+              }
+            />
+            <Row
+              label="Ingredients"
+              value={`${config.ingredients.length + config.customIngredients.length} items`}
+            />
+            <Row label="Repeats / week" value={`${config.repeatsPerWeek}`} />
+            <Row label="Cheat day" value={config.cheatDay ?? "None"} />
+            <Row
+              label="Mealtimes"
+              value={`${config.mealtimes.breakfast} · ${config.mealtimes.lunch} · ${config.mealtimes.dinner}`}
+            />
+          </dl>
+        </details>
+      </section>
+
+      {/* Week cards — the primary action. Each card has its own prep
+          check-in link, so we don't repeat one at the page level. */}
+      <section className="mt-6 space-y-4">
         <WeekCard
           weekId={currentId}
           weekStart={isoDate(currentMonday)}
@@ -102,73 +177,6 @@ export default async function MealPlannerHomePage() {
 
       <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Configuration
-        </h2>
-        <dl className="mt-3 space-y-2 text-sm">
-          <Row
-            label="Diet"
-            value={
-              [
-                ...config.diets.map((id) => labelOf(ALL_DIETS, id)),
-                config.customDiet,
-              ]
-                .filter(Boolean)
-                .join(", ") || "—"
-            }
-          />
-          <Row
-            label="Health"
-            value={
-              [
-                ...config.healthConditions.map((id) =>
-                  labelOf(HEALTH_OPTIONS, id),
-                ),
-                config.customHealth,
-              ]
-                .filter(Boolean)
-                .join(", ") || "—"
-            }
-          />
-          <Row
-            label="Allergies"
-            value={
-              [
-                ...config.allergies.map((id) =>
-                  labelOf(COMMON_ALLERGIES, id),
-                ),
-                ...config.customAllergies,
-              ]
-                .filter(Boolean)
-                .join(", ") || "None"
-            }
-          />
-          <Row
-            label="Cuisines"
-            value={
-              [
-                ...config.cuisines.map((id) => labelOf(CUISINES, id)),
-                ...config.customCuisines,
-              ].join(", ") || "—"
-            }
-          />
-          <Row
-            label="Ingredients"
-            value={`${config.ingredients.length + config.customIngredients.length} items`}
-          />
-          <Row label="Repeats / week" value={`${config.repeatsPerWeek}`} />
-          <Row
-            label="Cheat day"
-            value={config.cheatDay ?? "None"}
-          />
-          <Row
-            label="Mealtimes"
-            value={`${config.mealtimes.breakfast} · ${config.mealtimes.lunch} · ${config.mealtimes.dinner}`}
-          />
-        </dl>
-      </section>
-
-      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Recurring reminders
         </h2>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -181,22 +189,6 @@ export default async function MealPlannerHomePage() {
             hasReminders={Boolean(config.reminderEventIds?.fridayPlan)}
           />
         </div>
-      </section>
-
-      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Prep check-in
-        </h2>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          Sunday flow — mark the dinners you&apos;ve prepped and add
-          breakfast/lunch. We&apos;ll schedule them on your Calendar.
-        </p>
-        <Link
-          href="/trackers/meal-planner/prep"
-          className="mt-4 block w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-        >
-          Open prep check-in →
-        </Link>
       </section>
     </AppShell>
   );

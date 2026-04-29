@@ -26,6 +26,7 @@ const SUBFOLDERS = [
   "history",
   "history/meals",
   "history/chats",
+  "history/photos",
   "grocery",
   "archive",
   "exports",
@@ -294,6 +295,69 @@ export async function readFileBytes(
   return res.arrayBuffer();
 }
 
+/**
+ * Upload binary content (e.g. an image taken on a phone). Returns the
+ * file ID and a webViewLink the user can open. The caller is expected to
+ * pass an already-decoded ArrayBuffer or Uint8Array.
+ *
+ * drive.file scope: we own this file because we created it; we can set
+ * permissions on it later if we want to surface it in a calendar event.
+ */
+export async function uploadBinary(
+  accessToken: string,
+  parentId: string,
+  name: string,
+  bytes: ArrayBuffer | Uint8Array,
+  mimeType: string,
+): Promise<{ id: string; webViewLink: string; webContentLink?: string }> {
+  const boundary = "atb_" + Math.random().toString(36).slice(2);
+  const metadata = JSON.stringify({ name, parents: [parentId], mimeType });
+
+  const buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const enc = new TextEncoder();
+  const head = enc.encode(
+    `--${boundary}\r\n` +
+      `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+      metadata +
+      `\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Type: ${mimeType}\r\n\r\n`,
+  );
+  const tail = enc.encode(`\r\n--${boundary}--`);
+
+  const body = new Uint8Array(head.length + buf.length + tail.length);
+  body.set(head, 0);
+  body.set(buf, head.length);
+  body.set(tail, head.length + buf.length);
+
+  const res = await fetch(
+    `${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,webViewLink,webContentLink`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    },
+  );
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new DriveError(res.statusText, res.status, errBody);
+  }
+  const data = (await res.json()) as {
+    id?: string;
+    webViewLink?: string;
+    webContentLink?: string;
+  };
+  if (!data.id) throw new Error("Drive uploadBinary: empty id");
+  return {
+    id: data.id,
+    webViewLink: data.webViewLink ?? `https://drive.google.com/file/d/${data.id}/view`,
+    webContentLink: data.webContentLink,
+  };
+}
+
 /** Delete (trash) a file. Drive's drive.file scope allows trashing files we created. */
 export async function deleteFile(
   accessToken: string,
@@ -372,17 +436,21 @@ export async function ensureAtomicTrackerLayout(
   accessToken: string,
   options: { googleSub: string; appVersion: string; tz?: string; locale?: string },
 ): Promise<AtomicTrackerLayout> {
-  // Fast path: user.json already exists
+  // Fast path: user.json already exists AND covers every folder we currently
+  // ship. If the SUBFOLDERS list grew since the cache was written (e.g. a new
+  // `history/photos` folder was added in a later commit), fall through to the
+  // full bootstrap so existing users automatically get the new folder.
   const existing = await readAtomicTrackerLayout(accessToken);
   if (existing && existing.folderIds["config"]) {
-    return existing;
+    const allKnown = SUBFOLDERS.every((p) => existing.folderIds[p]);
+    if (allKnown) return existing;
   }
 
   const { rootId, folderIds } = await bootstrapAtomicTrackerFolder(accessToken);
   const layout: AtomicTrackerLayout = {
     rootId,
     folderIds,
-    bootstrappedAt: new Date().toISOString(),
+    bootstrappedAt: existing?.bootstrappedAt ?? new Date().toISOString(),
     appVersion: options.appVersion,
   };
   const persisted = {

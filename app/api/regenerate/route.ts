@@ -13,7 +13,7 @@ import {
   type Day,
   type MealPlan,
 } from "@/lib/tracker/meal-planner-plan";
-import { fetchTopRecipeVideo } from "@/lib/youtube/lookup";
+import { fetchRecipeVideos } from "@/lib/youtube/lookup";
 import { PROVIDERS, type ProviderId } from "@/lib/ai/providers";
 
 export const maxDuration = 60;
@@ -94,13 +94,16 @@ export async function POST(req: Request) {
     }
     return { ...m, recipe_url: youtubeSearchUrl(m.youtube_query) };
   });
-  // Look up YouTube videos for unlocked meals if a key is provided
+  // Look up YouTube videos (top + alternatives) for unlocked meals.
   if (youtubeKey) {
     await Promise.all(
       finalMeals.map(async (m) => {
         if (m.locked) return;
-        const video = await fetchTopRecipeVideo(youtubeKey, m.youtube_query);
-        if (video) m.recipe_video = video;
+        const videos = await fetchRecipeVideos(youtubeKey, m.youtube_query, 5);
+        if (videos.length > 0) {
+          m.recipe_video = videos[0];
+          m.recipe_alternatives = videos.slice(1);
+        }
       }),
     );
   }

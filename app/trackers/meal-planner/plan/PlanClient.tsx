@@ -1,13 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
+  ClipboardCheck,
+  Flame,
   Lock,
   LockOpen,
   MessageCircle,
   PlayCircle,
   RefreshCw,
   Send,
+  Snowflake,
   X,
 } from "lucide-react";
 import { decryptJson } from "@/lib/crypto/webcrypto";
@@ -15,6 +19,7 @@ import { loadPassphrase } from "@/lib/storage/passphrase";
 import type { ProviderId } from "@/lib/ai/providers";
 import { readConnectorEnvelope } from "@/app/settings/actions";
 import type { Day, Meal, MealPlan } from "@/lib/tracker/meal-planner-plan";
+import { buildGroceryRows, groupGroceryRows } from "@/lib/tracker/grocery";
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 
@@ -309,6 +314,9 @@ export function PlanClient({
         })}
       </section>
 
+      {/* Grocery list preview (grouped by aisle) */}
+      <GroceryPreview plan={plan} />
+
       {/* Accept */}
       <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -336,6 +344,27 @@ export function PlanClient({
         ) : null}
       </section>
 
+      {/* Prep check-in for this specific week (only meaningful once accepted) */}
+      {isAccepted ? (
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Prep check-in · {plan.weekId}
+          </h2>
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            Mark which meals you actually prepped for this week, upload photos
+            of finished dishes, and we&apos;ll schedule breakfast/lunch/dinner
+            on your Calendar.
+          </p>
+          <Link
+            href={`/trackers/meal-planner/prep?week=${plan.weekId}`}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            <ClipboardCheck className="h-4 w-4" />
+            Open prep check-in for this week
+          </Link>
+        </section>
+      ) : null}
+
       {/* Chat FAB */}
       <button
         type="button"
@@ -358,6 +387,54 @@ export function PlanClient({
         />
       ) : null}
     </>
+  );
+}
+
+function GroceryPreview({ plan }: { plan: MealPlan }) {
+  const rows = buildGroceryRows(plan);
+  const groups = groupGroceryRows(rows);
+  if (groups.length === 0) return null;
+  const totalItems = rows.length;
+  return (
+    <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <details>
+        <summary className="cursor-pointer">
+          <span className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Grocery list · {totalItems} items
+          </span>
+          <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
+            (grouped by aisle)
+          </span>
+        </summary>
+        <div className="mt-3 space-y-4">
+          {groups.map((g) => (
+            <div key={g.category}>
+              <p className="mb-1.5 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                <span>{g.label}</span>
+                <span className="text-slate-400 dark:text-slate-500">
+                  {g.rows.length}
+                </span>
+              </p>
+              <ul className="space-y-1">
+                {g.rows.map((row, i) => (
+                  <li
+                    key={`${g.category}-${i}`}
+                    className="flex items-center justify-between gap-2 rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs dark:border-slate-800 dark:bg-slate-950"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-300">
+                      {row.qty} {row.unit} {row.item}
+                    </span>
+                    <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">
+                      {row.day_added}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </details>
+    </section>
   );
 }
 
@@ -638,35 +715,78 @@ function MealCard({
         </div>
       ) : null}
 
+      {meal.storage ? (
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 p-2 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
+          <Snowflake className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <p><span className="font-semibold">Store:</span> {meal.storage}</p>
+        </div>
+      ) : null}
+      {meal.reheat ? (
+        <div className="mt-2 flex items-start gap-2 rounded-md border border-orange-200 bg-orange-50 p-2 text-xs text-orange-900 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-200">
+          <Flame className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <p><span className="font-semibold">Reheat:</span> {meal.reheat}</p>
+        </div>
+      ) : null}
+
       <div className="mt-3 space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {meal.recipe_video ? (
-            <a
-              href={meal.recipe_video.url}
-              target="_blank"
-              rel="noreferrer"
-              title={`${meal.recipe_video.title} · ${meal.recipe_video.channel}`}
-              className="inline-flex max-w-full items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700 transition hover:bg-red-100 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/60"
-            >
-              <PlayCircle className="h-3 w-3 shrink-0" />
-              <span className="truncate">{meal.recipe_video.title}</span>
-            </a>
-          ) : null}
-          {meal.recipe_url ? (
-            <a
-              href={meal.recipe_url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              {meal.recipe_video ? "Browse more" : "Recipe video"}
-            </a>
-          ) : null}
+        {meal.recipe_video ? (
+          <a
+            href={meal.recipe_video.url}
+            target="_blank"
+            rel="noreferrer"
+            title={`${meal.recipe_video.title} · ${meal.recipe_video.channel}`}
+            className="flex w-full items-center gap-2 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] font-medium text-red-700 transition hover:bg-red-100 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/60"
+          >
+            <PlayCircle className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex-1 truncate text-left">
+              <span className="font-semibold">Recommended:</span> {meal.recipe_video.title}
+            </span>
+          </a>
+        ) : null}
+        {meal.recipe_alternatives && meal.recipe_alternatives.length > 0 ? (
+          <details className="text-xs">
+            <summary className="cursor-pointer text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200">
+              Other recipe videos ({meal.recipe_alternatives.length})
+            </summary>
+            <ul className="mt-1.5 space-y-1">
+              {meal.recipe_alternatives.map((alt) => (
+                <li key={alt.id}>
+                  <a
+                    href={alt.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={`${alt.title} · ${alt.channel}`}
+                    className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    <PlayCircle className="h-3 w-3 shrink-0 text-red-500" />
+                    <span className="flex-1 truncate">{alt.title}</span>
+                    {alt.channel ? (
+                      <span className="shrink-0 text-[10px] text-slate-400 dark:text-slate-500">
+                        {alt.channel}
+                      </span>
+                    ) : null}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : !meal.recipe_video && meal.recipe_url ? (
+          <a
+            href={meal.recipe_url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            <PlayCircle className="h-3 w-3 shrink-0" />
+            Search YouTube
+          </a>
+        ) : null}
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={onSwap}
             disabled={busy || meal.locked}
-            className="ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
             {busy ? "…" : meal.locked ? "Locked" : "Swap"}

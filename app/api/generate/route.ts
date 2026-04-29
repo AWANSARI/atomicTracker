@@ -18,7 +18,7 @@ import {
 } from "@/lib/tracker/meal-planner-plan";
 import { parseMeals } from "@/lib/tracker/meal-planner-validate";
 import { findFile } from "@/lib/google/drive";
-import { fetchTopRecipeVideo } from "@/lib/youtube/lookup";
+import { fetchRecipeVideos } from "@/lib/youtube/lookup";
 import { PROVIDERS, type ProviderId } from "@/lib/ai/providers";
 
 // AI generation can take 5-15s; bump from 10s default to give Claude/OpenAI/Gemini headroom.
@@ -144,15 +144,19 @@ export async function POST(req: Request) {
   }
 
   // Attach YouTube fallback search URL on every meal. If a YouTube key was
-  // provided, also look up a specific top-result video for each meal's query.
+  // provided, also look up a recommended video + alternatives so the user
+  // can pick from real videos instead of being thrown into search results.
   for (const m of meals) {
     m.recipe_url = youtubeSearchUrl(m.youtube_query);
   }
   if (youtubeKey) {
     await Promise.all(
       meals.map(async (m) => {
-        const video = await fetchTopRecipeVideo(youtubeKey, m.youtube_query);
-        if (video) m.recipe_video = video;
+        const videos = await fetchRecipeVideos(youtubeKey, m.youtube_query, 5);
+        if (videos.length > 0) {
+          m.recipe_video = videos[0];
+          m.recipe_alternatives = videos.slice(1);
+        }
       }),
     );
   }

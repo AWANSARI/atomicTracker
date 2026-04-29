@@ -228,11 +228,20 @@ export async function POST(req: Request) {
           ...meal.ingredients.map((i) => `  • ${i.qty} ${i.unit} ${i.name}`),
           "",
           `Instructions: ${meal.instructions}`,
+          ...(meal.storage ? ["", `Store: ${meal.storage}`] : []),
+          ...(meal.reheat ? [`Reheat: ${meal.reheat}`] : []),
           ...(meal.recipe_video?.url
             ? ["", `Recipe: ${meal.recipe_video.title} — ${meal.recipe_video.url}`]
             : meal.recipe_url
               ? ["", `Recipe search: ${meal.recipe_url}`]
               : []),
+          ...(meal.recipe_alternatives && meal.recipe_alternatives.length > 0
+            ? [
+                "",
+                "More recipes:",
+                ...meal.recipe_alternatives.map((alt) => `  • ${alt.title} — ${alt.url}`),
+              ]
+            : []),
         ].join("\n"),
         start: localDateTime(dayDate, dinnerTime, timezone),
         end: localDateTime(dayDate, addMinutes(dinnerTime, 60), timezone),

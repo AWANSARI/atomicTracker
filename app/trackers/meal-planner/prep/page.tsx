@@ -70,7 +70,10 @@ export default async function PrepPage({
   }
 
   // Read existing prep state if any (lets the user revisit and update)
-  let existingPrep: { prepped: string[] } | null = null;
+  let existingPrep: {
+    prepped?: string[];
+    days?: Record<string, unknown>;
+  } | null = null;
   if (plan && mealsFolderId) {
     const prepFileId = await findFile(
       accessToken,
@@ -78,10 +81,10 @@ export default async function PrepPage({
       mealsFolderId,
     );
     if (prepFileId) {
-      existingPrep = await readJson<{ prepped: string[] }>(
-        accessToken,
-        prepFileId,
-      ).catch(() => null);
+      existingPrep = await readJson<{
+        prepped?: string[];
+        days?: Record<string, unknown>;
+      }>(accessToken, prepFileId).catch(() => null);
     }
   }
 
@@ -128,6 +131,11 @@ export default async function PrepPage({
           plan={plan}
           mealtimes={config.mealtimes}
           initialPrepped={existingPrep?.prepped ?? []}
+          initialPrep={
+            existingPrep?.days as
+              | Parameters<typeof PrepClient>[0]["initialPrep"]
+              | undefined
+          }
           defaultBreakfast={config.defaultBreakfast ?? ""}
           defaultLunch={config.defaultLunch ?? ""}
         />

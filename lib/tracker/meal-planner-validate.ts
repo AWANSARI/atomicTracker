@@ -58,6 +58,8 @@ export function parseSingleMeal(item: unknown): Meal | null {
     ingredients,
     instructions: m.instructions,
     youtube_query: m.youtube_query,
+    storage: typeof m.storage === "string" ? m.storage : undefined,
+    reheat: typeof m.reheat === "string" ? m.reheat : undefined,
   };
 }
 

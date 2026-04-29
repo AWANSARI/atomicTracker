@@ -13,7 +13,7 @@ import {
   type Day,
   type MealPlan,
 } from "@/lib/tracker/meal-planner-plan";
-import { fetchTopRecipeVideo } from "@/lib/youtube/lookup";
+import { fetchRecipeVideos } from "@/lib/youtube/lookup";
 import { PROVIDERS, type ProviderId } from "@/lib/ai/providers";
 
 export const maxDuration = 60;
@@ -90,8 +90,11 @@ export async function POST(req: Request) {
   }
   newMeal.recipe_url = youtubeSearchUrl(newMeal.youtube_query);
   if (youtubeKey) {
-    const video = await fetchTopRecipeVideo(youtubeKey, newMeal.youtube_query);
-    if (video) newMeal.recipe_video = video;
+    const videos = await fetchRecipeVideos(youtubeKey, newMeal.youtube_query, 5);
+    if (videos.length > 0) {
+      newMeal.recipe_video = videos[0];
+      newMeal.recipe_alternatives = videos.slice(1);
+    }
   }
 
   // Build updated plan + mark this day as modified-after-accept

@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { CalendarDays, CheckCircle2, FileEdit, MinusCircle } from "lucide-react";
+import {
+  CalendarDays,
+  CheckCircle2,
+  ClipboardCheck,
+  FileEdit,
+  MinusCircle,
+} from "lucide-react";
 import { GenerateClient } from "@/app/trackers/meal-planner/GenerateClient";
 import { DAYS, type Day, type MealPlan } from "@/lib/tracker/meal-planner-plan";
 
@@ -97,6 +103,15 @@ export function WeekCard({
             className="block w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             View · swap · accept →
+          </Link>
+        ) : null}
+        {plan && plan.status === "accepted" ? (
+          <Link
+            href={`/trackers/meal-planner/prep?week=${weekId}`}
+            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:bg-emerald-950/60"
+          >
+            <ClipboardCheck className="h-3.5 w-3.5" />
+            Prep check-in for this week
           </Link>
         ) : null}
         <GenerateClient

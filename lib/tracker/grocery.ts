@@ -33,6 +33,49 @@ const CATEGORY_ORDER: Record<string, number> = {
   "": 9,
 };
 
+const CATEGORY_LABELS: Record<string, string> = {
+  produce: "Produce",
+  protein: "Proteins",
+  dairy: "Dairy",
+  grain: "Grains",
+  pantry: "Pantry",
+  spice: "Spices",
+  frozen: "Frozen",
+  other: "Other",
+  "": "Other",
+};
+
+export type GroceryGroup = {
+  category: string;
+  label: string;
+  rows: GroceryRow[];
+};
+
+/** Group flat rows by category for grouped UI rendering. */
+export function groupGroceryRows(rows: GroceryRow[]): GroceryGroup[] {
+  const map = new Map<string, GroceryRow[]>();
+  for (const row of rows) {
+    const cat = row.category || "other";
+    const list = map.get(cat) ?? [];
+    list.push(row);
+    map.set(cat, list);
+  }
+  const out: GroceryGroup[] = [];
+  for (const [cat, list] of map.entries()) {
+    out.push({
+      category: cat,
+      label: CATEGORY_LABELS[cat] ?? cat.charAt(0).toUpperCase() + cat.slice(1),
+      rows: list,
+    });
+  }
+  out.sort((a, b) => {
+    const ca = CATEGORY_ORDER[a.category] ?? 99;
+    const cb = CATEGORY_ORDER[b.category] ?? 99;
+    return ca - cb;
+  });
+  return out;
+}
+
 /**
  * Aggregate ingredients across all meals into one row per (item, unit).
  * Quantities are summed when parsable; non-numeric quantities are
@@ -151,7 +194,13 @@ function formatNumber(n: number): string {
   return n.toFixed(2).replace(/\.?0+$/, "");
 }
 
-/** RFC 4180 CSV with header row. */
+/**
+ * RFC 4180 CSV with header row. Items are grouped under category section
+ * markers (item column reads "── PRODUCE ──", etc.) so opening the CSV in
+ * Sheets/Excel shows clear visual breaks between aisle groups while keeping
+ * the data machine-readable (the `category` column on each item row is
+ * unchanged).
+ */
 export function rowsToCsv(rows: GroceryRow[]): string {
   const headers: (keyof GroceryRow)[] = [
     "week",
@@ -168,8 +217,27 @@ export function rowsToCsv(rows: GroceryRow[]): string {
     "purchased_at",
   ];
   const lines = [headers.join(",")];
-  for (const row of rows) {
-    lines.push(headers.map((h) => csvField(row[h] ?? "")).join(","));
+  const groups = groupGroceryRows(rows);
+  for (const g of groups) {
+    if (g.rows.length === 0) continue;
+    const headerRow: GroceryRow = {
+      week: g.rows[0]?.week ?? "",
+      day_added: "",
+      item: `── ${g.label.toUpperCase()} (${g.rows.length}) ──`,
+      qty: "",
+      unit: "",
+      category: g.category,
+      walmart_url: "",
+      amazon_url: "",
+      doordash_url: "",
+      recipe_link: "",
+      status: "",
+      purchased_at: "",
+    };
+    lines.push(headers.map((h) => csvField(headerRow[h] ?? "")).join(","));
+    for (const row of g.rows) {
+      lines.push(headers.map((h) => csvField(row[h] ?? "")).join(","));
+    }
   }
   return lines.join("\n") + "\n";
 }
