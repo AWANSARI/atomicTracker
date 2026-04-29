@@ -61,6 +61,20 @@ export type MealPlannerConfig = {
   /** Free-text from a nutritionist (or self) — fed verbatim into the AI prompt. */
   nutritionistNotes?: string;
 
+  /**
+   * Lifestyle / wellness symptoms the user is trying to address. Identifiers
+   * from SYMPTOM_OPTIONS (hair-loss, fatigue, brain-fog, irregular-cycle…).
+   * Distinct from healthConditions — symptoms are observed, not diagnosed.
+   * Fed into the AI prompt so meals bias toward addressing them.
+   */
+  symptoms?: string[];
+
+  /**
+   * If true, AI generates a 4-slot week (breakfast + lunch + dinner + snack).
+   * If false (default), only dinner — preserves the legacy single-slot flow.
+   */
+  snacksEnabled?: boolean;
+
   /** Mealtime defaults for Sunday prep flow (HH:MM in user's local tz). */
   mealtimes: {
     breakfast: string;

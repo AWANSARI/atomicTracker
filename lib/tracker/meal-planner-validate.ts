@@ -1,6 +1,7 @@
-import type { Day, Meal } from "./meal-planner-plan";
+import type { Day, Meal, Slot } from "./meal-planner-plan";
 
 const VALID_DAYS: Day[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const VALID_SLOTS: Slot[] = ["breakfast", "lunch", "dinner", "snack"];
 
 /** Parse one meal object from unknown JSON, or null if it doesn't match. */
 export function parseSingleMeal(item: unknown): Meal | null {
@@ -43,8 +44,13 @@ export function parseSingleMeal(item: unknown): Meal | null {
   });
   if (typeof m.instructions !== "string") return null;
   if (typeof m.youtube_query !== "string") return null;
+  // Slot is optional — defaults to "dinner" for legacy (single-slot) plans.
+  const slot: Slot = VALID_SLOTS.includes(m.slot as Slot)
+    ? (m.slot as Slot)
+    : "dinner";
   return {
     day: m.day as Day,
+    slot,
     name: m.name,
     cuisine: m.cuisine,
     calories: m.calories,
@@ -65,7 +71,8 @@ export function parseSingleMeal(item: unknown): Meal | null {
 
 /**
  * Parse `{ meals: [...] }` shape. Returns null if any meal is malformed.
- * Allows 1-7 meals (cheat day or low-cook-frequency configs may have fewer).
+ * Allows 1-28 meals (single-slot dinner-only weeks up through full
+ * 4-slot × 7-day plans).
  */
 export function parseMeals(json: unknown): Meal[] | null {
   if (!json || typeof json !== "object") return null;
@@ -77,7 +84,7 @@ export function parseMeals(json: unknown): Meal[] | null {
     if (!m) return null;
     out.push(m);
   }
-  if (out.length < 1 || out.length > 7) return null;
+  if (out.length < 1 || out.length > 28) return null;
   return out;
 }
 

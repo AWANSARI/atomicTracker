@@ -22,7 +22,14 @@ import { decryptJson } from "@/lib/crypto/webcrypto";
 import { loadPassphrase } from "@/lib/storage/passphrase";
 import type { ProviderId } from "@/lib/ai/providers";
 import { readConnectorEnvelope } from "@/app/settings/actions";
-import type { Day, Ingredient, Meal, MealPlan } from "@/lib/tracker/meal-planner-plan";
+import {
+  SLOT_LABEL,
+  type Day,
+  type Ingredient,
+  type Meal,
+  type MealPlan,
+  type Slot,
+} from "@/lib/tracker/meal-planner-plan";
 import { buildGroceryRows, groupGroceryRows } from "@/lib/tracker/grocery";
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
@@ -348,11 +355,13 @@ export function PlanClient({
       </section>
 
       <section className="mt-4 space-y-3">
-        {plan.meals.map((m) => {
+        {sortMealsForDisplay(plan.meals).map((m) => {
           const isStaleOnCalendar = Boolean(plan.modifiedByDay?.[m.day]);
+          const slot = m.slot ?? "dinner";
+          const key = `${m.day}/${slot}`;
           return (
             <MealCard
-              key={m.day}
+              key={key}
               meal={m}
               busy={busyDay === m.day || busyDay === "all"}
               syncing={syncingDay === m.day}
@@ -715,7 +724,7 @@ function MealCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            {meal.day} · {meal.cuisine}
+            {meal.day} · {SLOT_LABEL[meal.slot ?? "dinner"]} · {meal.cuisine}
           </p>
           <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-50">
             {meal.name}
@@ -1083,6 +1092,27 @@ function IngredientsEditor({
       ) : null}
     </details>
   );
+}
+
+// Order plan.meals so the UI renders Mon→Sun, and within each day:
+// breakfast → lunch → dinner → snack. AI output order is mostly correct
+// already, but legacy plans (dinner-only) and partial regenerations can
+// scramble it.
+function sortMealsForDisplay(meals: Meal[]): Meal[] {
+  const dayOrder: Record<Day, number> = {
+    Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6,
+  };
+  const slotOrder: Record<Slot, number> = {
+    breakfast: 0, lunch: 1, dinner: 2, snack: 3,
+  };
+  return [...meals].sort((a, b) => {
+    const da = dayOrder[a.day];
+    const db = dayOrder[b.day];
+    if (da !== db) return da - db;
+    const sa = slotOrder[a.slot ?? "dinner"];
+    const sb = slotOrder[b.slot ?? "dinner"];
+    return sa - sb;
+  });
 }
 
 function Macro({ label, value }: { label: string; value: number }) {

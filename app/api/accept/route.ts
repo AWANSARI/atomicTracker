@@ -80,19 +80,34 @@ export async function POST(req: Request) {
   }
 
   // 0. Delete previous events for the days we're re-accepting.
-  // Full re-accept (no onlyDays): clear admin events + ALL per-day dinner events.
-  // Partial re-accept (onlyDays set): clear ONLY the per-day events for those days.
+  // Full re-accept (no onlyDays): clear admin events + ALL per-(day,slot) events.
+  // Partial re-accept (onlyDays set): clear ONLY events for those days.
   const previousAdminEventIds: string[] = partial
     ? []
     : Array.isArray(plan.calendarEventIds)
       ? plan.calendarEventIds
       : [];
-  const previousDayEventIds: { day: Day; id: string }[] = [];
+  const previousIds: string[] = [];
+  // Prefer the slot-aware map (new plans). Fall back to legacy day-only map
+  // for plans saved before the multi-slot rewrite.
+  const existingBySlot = plan.eventIdByDaySlot ?? {};
+  for (const key of Object.keys(existingBySlot)) {
+    const day = key.split("/")[0] as Day;
+    if (partial && !onlyDays.includes(day)) continue;
+    const id = existingBySlot[key];
+    if (id) previousIds.push(id);
+  }
+  // Legacy fallback — only consult if slot-aware map was empty for this day
+  // to avoid double-deleting the same dinner ID.
+  const slotAwareDays = new Set(
+    Object.keys(existingBySlot).map((k) => k.split("/")[0]),
+  );
   const existingByDay = plan.eventIdByDay ?? {};
   for (const day of (Object.keys(existingByDay) as Day[])) {
     if (partial && !onlyDays.includes(day)) continue;
+    if (slotAwareDays.has(day)) continue;
     const id = existingByDay[day];
-    if (id) previousDayEventIds.push({ day, id });
+    if (id) previousIds.push(id);
   }
   const deletionResults: { id: string; deleted: boolean; error?: string }[] = [];
   for (const eventId of previousAdminEventIds) {
@@ -107,7 +122,7 @@ export async function POST(req: Request) {
       });
     }
   }
-  for (const { id } of previousDayEventIds) {
+  for (const id of previousIds) {
     try {
       const deleted = await deleteEvent(session.accessToken, id);
       deletionResults.push({ id, deleted });
@@ -197,29 +212,52 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3. Create Calendar events
-  // (Admin events moved to /api/setup-reminders; locals removed.)
+  // 3. Create Calendar events — one per meal (B/L/D/Snack) on its slot time.
 
   const eventResults: { name: string; ok: boolean; htmlLink?: string; error?: string }[] = [];
   const newAdminEventIds: string[] = [];
   const newEventIdByDay: Partial<Record<Day, string>> = {};
+  const newEventIdByDaySlot: Partial<Record<string, string>> = {};
 
-  // ---- Per-day dinner events (always created) ----
   const weekStartDate = new Date(plan.weekStart + "T00:00:00Z");
   const DAY_OFFSETS: Record<Day, number> = {
     Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6,
   };
-  const dinnerTime = config?.mealtimes.dinner ?? "19:00";
+
+  // Slot → time + duration + emoji. Snack defaults to mid-afternoon.
+  const SLOT_EMOJI: Record<string, string> = {
+    breakfast: "🥣",
+    lunch: "🥗",
+    dinner: "🍽",
+    snack: "🥜",
+  };
+  const SLOT_DURATION_MIN: Record<string, number> = {
+    breakfast: 30,
+    lunch: 45,
+    dinner: 60,
+    snack: 15,
+  };
+  function slotTime(slot: string): string {
+    if (!config) return "19:00";
+    if (slot === "breakfast") return config.mealtimes.breakfast;
+    if (slot === "lunch") return config.mealtimes.lunch;
+    if (slot === "dinner") return config.mealtimes.dinner;
+    // Snack: pick a time between lunch + dinner, default 16:30.
+    if (slot === "snack") return "16:30";
+    return config.mealtimes.dinner;
+  }
 
   for (const meal of plan.meals) {
     if (partial && !onlyDays.includes(meal.day)) continue;
+    const slot = meal.slot ?? "dinner";
     const dayDate = new Date(weekStartDate);
     dayDate.setUTCDate(weekStartDate.getUTCDate() + DAY_OFFSETS[meal.day]);
+    const startTime = slotTime(slot);
     try {
       const ev = await createEvent(session.accessToken, {
-        summary: `🍽 ${meal.name}`,
+        summary: `${SLOT_EMOJI[slot] ?? "🍽"} ${meal.name}`,
         description: [
-          `${meal.cuisine} · ${meal.calories} kcal`,
+          `${slot.charAt(0).toUpperCase() + slot.slice(1)} · ${meal.cuisine} · ${meal.calories} kcal`,
           `Macros — P ${meal.macros.protein_g}g / C ${meal.macros.carbs_g}g / F ${meal.macros.fat_g}g / Fib ${meal.macros.fiber_g}g`,
           "",
           meal.health_notes,
@@ -243,83 +281,30 @@ export async function POST(req: Request) {
               ]
             : []),
         ].join("\n"),
-        start: localDateTime(dayDate, dinnerTime, timezone),
-        end: localDateTime(dayDate, addMinutes(dinnerTime, 60), timezone),
+        start: localDateTime(dayDate, startTime, timezone),
+        end: localDateTime(dayDate, addMinutes(startTime, SLOT_DURATION_MIN[slot] ?? 30), timezone),
         reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 30 }] },
         ...(meal.recipe_video?.url
           ? { source: { title: "Recipe video", url: meal.recipe_video.url } }
           : {}),
       });
-      newEventIdByDay[meal.day] = ev.id;
-      eventResults.push({ name: `${meal.day} · ${meal.name}`, ok: true, htmlLink: ev.htmlLink });
+      newEventIdByDaySlot[`${meal.day}/${slot}`] = ev.id;
+      // Keep the legacy dinner-only map populated for back-compat with the
+      // existing per-day re-accept UI in PlanClient.
+      if (slot === "dinner") {
+        newEventIdByDay[meal.day] = ev.id;
+      }
+      eventResults.push({
+        name: `${meal.day} · ${slot} · ${meal.name}`,
+        ok: true,
+        htmlLink: ev.htmlLink,
+      });
     } catch (e) {
       eventResults.push({
-        name: `${meal.day} · ${meal.name}`,
+        name: `${meal.day} · ${slot} · ${meal.name}`,
         ok: false,
         error: e instanceof Error ? e.message : String(e),
       });
-    }
-  }
-
-  // ---- Per-day breakfast + lunch events (Mon-Fri) using config defaults ----
-  // Only on full accept (partial re-accept doesn't touch B/L).
-  if (!partial && config) {
-    const WEEKDAYS: Day[] = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-    if (config.defaultBreakfast) {
-      for (const day of WEEKDAYS) {
-        if (config.cheatDay === day) continue;
-        const dayDate = new Date(weekStartDate);
-        dayDate.setUTCDate(weekStartDate.getUTCDate() + DAY_OFFSETS[day]);
-        try {
-          const ev = await createEvent(session.accessToken, {
-            summary: `🥣 ${config.defaultBreakfast}`,
-            description: "Breakfast — scheduled by AtomicTracker accept.",
-            start: localDateTime(dayDate, config.mealtimes.breakfast, timezone),
-            end: localDateTime(
-              dayDate,
-              addMinutes(config.mealtimes.breakfast, 30),
-              timezone,
-            ),
-            reminders: { useDefault: false },
-          });
-          newAdminEventIds.push(ev.id);
-          eventResults.push({ name: `${day} · breakfast`, ok: true, htmlLink: ev.htmlLink });
-        } catch (e) {
-          eventResults.push({
-            name: `${day} · breakfast`,
-            ok: false,
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
-      }
-    }
-    if (config.defaultLunch) {
-      for (const day of WEEKDAYS) {
-        if (config.cheatDay === day) continue;
-        const dayDate = new Date(weekStartDate);
-        dayDate.setUTCDate(weekStartDate.getUTCDate() + DAY_OFFSETS[day]);
-        try {
-          const ev = await createEvent(session.accessToken, {
-            summary: `🥗 ${config.defaultLunch}`,
-            description: "Lunch — scheduled by AtomicTracker accept.",
-            start: localDateTime(dayDate, config.mealtimes.lunch, timezone),
-            end: localDateTime(
-              dayDate,
-              addMinutes(config.mealtimes.lunch, 30),
-              timezone,
-            ),
-            reminders: { useDefault: false },
-          });
-          newAdminEventIds.push(ev.id);
-          eventResults.push({ name: `${day} · lunch`, ok: true, htmlLink: ev.htmlLink });
-        } catch (e) {
-          eventResults.push({
-            name: `${day} · lunch`,
-            ok: false,
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
-      }
     }
   }
 
@@ -331,10 +316,15 @@ export async function POST(req: Request) {
   if (!partial) {
     acceptedPlan.calendarEventIds = newAdminEventIds;
     acceptedPlan.eventIdByDay = newEventIdByDay;
+    acceptedPlan.eventIdByDaySlot = newEventIdByDaySlot;
   } else {
     acceptedPlan.eventIdByDay = {
       ...(acceptedPlan.eventIdByDay ?? {}),
       ...newEventIdByDay,
+    };
+    acceptedPlan.eventIdByDaySlot = {
+      ...(acceptedPlan.eventIdByDaySlot ?? {}),
+      ...newEventIdByDaySlot,
     };
   }
   try {
@@ -368,7 +358,7 @@ export async function POST(req: Request) {
       events: eventResults,
       deleted: deletionResults,
     },
-    reaccept: previousAdminEventIds.length > 0 || previousDayEventIds.length > 0,
+    reaccept: previousAdminEventIds.length > 0 || previousIds.length > 0,
   });
 }
 

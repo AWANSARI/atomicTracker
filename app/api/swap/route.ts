@@ -12,6 +12,8 @@ import {
   youtubeSearchUrl,
   type Day,
   type MealPlan,
+  type Slot,
+  SLOTS,
 } from "@/lib/tracker/meal-planner-plan";
 import { fetchRecipeVideos } from "@/lib/youtube/lookup";
 import { PROVIDERS, type ProviderId } from "@/lib/ai/providers";
@@ -32,6 +34,8 @@ export async function POST(req: Request) {
     youtubeKey?: string;
     plan?: MealPlan;
     dayToSwap?: string;
+    /** Optional: which slot to swap. Defaults to "dinner" for legacy clients. */
+    slotToSwap?: string;
   };
   try {
     body = await req.json();
@@ -44,6 +48,9 @@ export async function POST(req: Request) {
   const youtubeKey = typeof body.youtubeKey === "string" ? body.youtubeKey : "";
   const plan = body.plan;
   const dayToSwap = body.dayToSwap as Day | undefined;
+  const slotToSwap: Slot = SLOTS.includes(body.slotToSwap as Slot)
+    ? (body.slotToSwap as Slot)
+    : "dinner";
 
   if (!provider || !PROVIDERS[provider])
     return NextResponse.json({ error: "Invalid provider" }, { status: 400 });
@@ -66,6 +73,7 @@ export async function POST(req: Request) {
     weekEnd: plan.weekEnd,
     currentPlan: plan,
     dayToSwap,
+    slotToSwap,
   });
 
   let generated;
@@ -88,6 +96,8 @@ export async function POST(req: Request) {
   if (newMeal.day !== dayToSwap) {
     newMeal.day = dayToSwap;
   }
+  // Force the slot we asked for — the AI may omit or guess wrong.
+  newMeal.slot = slotToSwap;
   newMeal.recipe_url = youtubeSearchUrl(newMeal.youtube_query);
   if (youtubeKey) {
     const videos = await fetchRecipeVideos(youtubeKey, newMeal.youtube_query, 5);
@@ -97,8 +107,11 @@ export async function POST(req: Request) {
     }
   }
 
-  // Build updated plan + mark this day as modified-after-accept
-  const updatedMeals = plan.meals.map((m) => (m.day === dayToSwap ? newMeal : m));
+  // Replace the matching (day, slot) entry. Legacy plans without slot are
+  // treated as dinners — replace them when slotToSwap === "dinner".
+  const updatedMeals = plan.meals.map((m) =>
+    m.day === dayToSwap && (m.slot ?? "dinner") === slotToSwap ? newMeal : m,
+  );
   const modifiedByDay: Partial<Record<Day, string>> = {
     ...(plan.modifiedByDay ?? {}),
   };

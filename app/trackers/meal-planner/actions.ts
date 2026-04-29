@@ -73,6 +73,8 @@ export const readMealPlannerConfig = cache(async (): Promise<MealPlannerConfig |
       activityLevel: raw.activityLevel,
       goal: raw.goal,
       nutritionistNotes: raw.nutritionistNotes,
+      symptoms: Array.isArray(raw.symptoms) ? raw.symptoms : [],
+      snacksEnabled: typeof raw.snacksEnabled === "boolean" ? raw.snacksEnabled : false,
       createdAt: raw.createdAt ?? defaults.createdAt,
       updatedAt: raw.updatedAt ?? defaults.updatedAt,
     };

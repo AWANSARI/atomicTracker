@@ -7,6 +7,19 @@
 export type Day = "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
 export const DAYS: Day[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+/**
+ * Meal slot. "dinner" is the legacy default — older accepted plans without
+ * a slot field will be normalized to dinner on read.
+ */
+export type Slot = "breakfast" | "lunch" | "dinner" | "snack";
+export const SLOTS: Slot[] = ["breakfast", "lunch", "dinner", "snack"];
+export const SLOT_LABEL: Record<Slot, string> = {
+  breakfast: "Breakfast",
+  lunch: "Lunch",
+  dinner: "Dinner",
+  snack: "Snack",
+};
+
 export type Macros = {
   protein_g: number;
   carbs_g: number;
@@ -41,6 +54,12 @@ export type RecipeVideo = {
 
 export type Meal = {
   day: Day;
+  /**
+   * Which slot this meal occupies. Optional for back-compat with legacy plans
+   * generated before the multi-slot rewrite (those are all dinners). New plans
+   * always set this explicitly. Legacy reads should default to "dinner".
+   */
+  slot?: Slot;
   name: string;
   cuisine: string;
   calories: number;
@@ -77,8 +96,19 @@ export type MealPlan = {
   meals: Meal[];
   /** IDs of admin events (Friday/Sunday/Saturday) created at the last accept. */
   calendarEventIds?: string[];
-  /** Per-day dinner event IDs from accept. Used for per-day re-accept. */
+  /**
+   * Per-day dinner event IDs from accept. Used for per-day re-accept.
+   * @deprecated Legacy; new plans use eventIdByDaySlot. Kept so old saved
+   * plans continue to round-trip correctly. New code should also populate
+   * this for the dinner slot to keep the legacy re-accept path working.
+   */
   eventIdByDay?: Partial<Record<Day, string>>;
+  /**
+   * Per-day-per-slot Calendar event IDs from accept. Keyed by `${day}/${slot}`
+   * (e.g. "Mon/breakfast"). Set for plans generated after the multi-slot
+   * rewrite. Drives per-slot re-accept.
+   */
+  eventIdByDaySlot?: Partial<Record<string, string>>;
   acceptedAt?: string;
   /** Per-day timestamp of last meal modification (after accept). */
   modifiedByDay?: Partial<Record<Day, string>>;

@@ -19,18 +19,19 @@ export default async function HomePage() {
         </div>
         <div>
           <h1 className="text-lg font-semibold tracking-tight">AtomicTracker</h1>
-          <p className="text-xs text-slate-500">Weekly meal planner</p>
+          <p className="text-xs text-slate-500">Routine, nutrition, hormonal balance</p>
         </div>
       </header>
 
       <section className="mt-12 flex-1">
         <h2 className="text-3xl font-semibold leading-tight tracking-tight">
-          Plan your week, your way.
+          Routine timing. Nutrient absorption. Whole-day balance.
         </h2>
         <p className="mt-4 text-slate-600">
-          Sign in with Google, pick an AI of your choice (Claude, ChatGPT, or
-          Gemini), and let AtomicTracker write your meal plans, grocery lists,
-          and calendar events — all stored in your own Drive.
+          AtomicTracker plans your week around meals, supplements, and habits
+          that actually move your health markers. Built for men and women
+          managing thyroid, hair loss, fatigue, hormonal balance — and anyone
+          who wants their day to actually fit together.
         </p>
 
         <ul className="mt-8 space-y-3 text-sm text-slate-700">
@@ -38,25 +39,25 @@ export default async function HomePage() {
             <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
               1
             </span>
-            Sign in with your Google account
+            Weekly meal plan (B/L/D + optional snacks) tuned to your body, goal, and symptoms
           </li>
           <li className="flex items-start gap-3">
             <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
               2
             </span>
-            Grant Drive + Calendar access (least-privilege scopes)
+            Supplement scheduler that respects timing — empty-stomach, 2-h gaps from iron / calcium
           </li>
           <li className="flex items-start gap-3">
             <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
               3
             </span>
-            Plug in your AI provider key — guided wizard
+            Daily habit checklist with streaks for soaked nuts, seed cycling, fruit, water, sleep
           </li>
           <li className="flex items-start gap-3">
             <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
               4
             </span>
-            Configure cuisines, diet, health, and frequency. Done.
+            All your data lives in your own Google Drive — your AI key stays encrypted and yours.
           </li>
         </ul>
       </section>

@@ -36,7 +36,7 @@ export default async function DashboardPage() {
   return (
     <AppShell
       title="AtomicTracker"
-      subtitle="Dashboard"
+      subtitle="Routine · nutrition · balance"
       rightSlot={
         <form
           action={async () => {

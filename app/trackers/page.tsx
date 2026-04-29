@@ -1,10 +1,17 @@
 import Link from "next/link";
-import { Dumbbell, UtensilsCrossed, Wallet } from "lucide-react";
+import { Dumbbell, Pill, Sprout, UtensilsCrossed, Wallet } from "lucide-react";
 import { hasMealPlannerConfig } from "./meal-planner/actions";
+import { hasSupplementConfig } from "./supplements/actions";
+import { hasHabitConfig } from "./habits/actions";
 import { AppShell } from "@/components/AppShell";
 
 export default async function TrackersPage() {
-  const mealPlannerConfigured = await hasMealPlannerConfig();
+  const [mealPlannerConfigured, supplementsConfigured, habitsConfigured] =
+    await Promise.all([
+      hasMealPlannerConfig(),
+      hasSupplementConfig(),
+      hasHabitConfig(),
+    ]);
 
   return (
     <AppShell
@@ -27,6 +34,38 @@ export default async function TrackersPage() {
               : "Plan dinners for the week with AI suggestions, ingredient lists, and Calendar reminders."
           }
           status={mealPlannerConfigured ? "configured" : "available"}
+        />
+
+        <TrackerCard
+          href={
+            supplementsConfigured
+              ? "/trackers/supplements"
+              : "/trackers/supplements/setup"
+          }
+          Icon={Pill}
+          title="Supplement Scheduler"
+          description={
+            supplementsConfigured
+              ? "Configured · tap to view today's schedule"
+              : "Track supplements & meds with conflict-aware timing and Calendar reminders."
+          }
+          status={supplementsConfigured ? "configured" : "available"}
+        />
+
+        <TrackerCard
+          href={
+            habitsConfigured
+              ? "/trackers/habits"
+              : "/trackers/habits/setup"
+          }
+          Icon={Sprout}
+          title="Habit Tracker"
+          description={
+            habitsConfigured
+              ? "Configured · tap to check off today's habits"
+              : "Daily non-negotiables with streaks and weekly consistency."
+          }
+          status={habitsConfigured ? "configured" : "available"}
         />
 
         <TrackerCard

@@ -6,6 +6,7 @@ import {
   COOKING_FREQUENCIES,
   CUISINES,
   HEALTH_OPTIONS,
+  SYMPTOM_OPTIONS,
 } from "./meal-planner-defaults";
 import type { MealPlannerConfig } from "./meal-planner-types";
 import type { MealPlan } from "./meal-planner-plan";
@@ -102,8 +103,22 @@ export function buildMealPlannerPrompt(args: {
   const daysToPlan = config.cheatDay
     ? allDays.filter((d) => d !== config.cheatDay)
     : allDays;
-  const mealCount = daysToPlan.length;
   const dayList = daysToPlan.join(", ");
+
+  // Slots to plan: always B/L/D; snacks optional via config.snacksEnabled.
+  const slotsToPlan: ("breakfast" | "lunch" | "dinner" | "snack")[] = config.snacksEnabled
+    ? ["breakfast", "lunch", "dinner", "snack"]
+    : ["breakfast", "lunch", "dinner"];
+  const mealCount = daysToPlan.length * slotsToPlan.length;
+  const slotList = slotsToPlan.join(", ");
+
+  // Symptom labels — drive meal selection bias when set.
+  const symptomLabels = (baseConfig.symptoms ?? [])
+    .map((id) => SYMPTOM_OPTIONS.find((s) => s.id === id)?.label ?? id)
+    .filter(Boolean);
+  const symptomBlock = symptomLabels.length
+    ? `\n  Symptoms to address: ${symptomLabels.join(", ")} — bias meals toward foods that support these (e.g. iron-rich for fatigue/hair-loss, anti-inflammatory for joint pain, fiber + probiotics for digestive issues, magnesium-rich for sleep).`
+    : "";
 
   // Cooking frequency note for the AI
   const freqInfo = COOKING_FREQUENCIES.find((f) => f.id === config.cookingFrequency);
@@ -152,11 +167,11 @@ export function buildMealPlannerPrompt(args: {
 ${override.notes ? `  Notes: ${override.notes}` : ""}${override.caloriesPerDay ? `\n  Per-day kcal target: ${override.caloriesPerDay}` : ""}${override.diets ? `\n  Diets (override): ${override.diets.join(", ") || "(any)"}` : ""}${override.cuisines ? `\n  Cuisines (override): ${[...override.cuisines, ...(override.customCuisines ?? [])].join(", ") || "(any)"}` : ""}${override.ingredients ? `\n  Pantry (override): ${[...override.ingredients, ...(override.customIngredients ?? [])].join(", ") || "(use common ingredients)"}` : ""}`
       : "";
 
-  return `You are a thoughtful meal-planning assistant. Generate exactly ${mealCount} dinner meals for the week of ${weekStart} through ${weekEnd}, one per day on these days only: ${dayList}.
+  return `You are a thoughtful meal-planning assistant. Generate a full daily-meal plan for the week of ${weekStart} through ${weekEnd}: exactly ${mealCount} entries — one per (day, slot) combination across these days [${dayList}] and these slots [${slotList}]. Snacks are ${config.snacksEnabled ? "INCLUDED" : "NOT INCLUDED"} this week.
 
-${config.cheatDay ? `IMPORTANT: ${config.cheatDay} is the user's cheat day — do NOT generate a meal for ${config.cheatDay}. The output array should NOT include any entry with day = "${config.cheatDay}".\n` : ""}USER PROFILE
+${config.cheatDay ? `IMPORTANT: ${config.cheatDay} is the user's cheat day — do NOT generate ANY meals for ${config.cheatDay} (no breakfast, no lunch, no dinner, no snack). The output array should NOT include any entry with day = "${config.cheatDay}".\n` : ""}USER PROFILE
   Diet preferences: ${dietLabels.join(", ") || "(none)"}
-  Health conditions: ${healthLabels.join(", ") || "(none)"} — adjust sodium, glycemic load, fiber, iodine, etc. as appropriate
+  Health conditions: ${healthLabels.join(", ") || "(none)"} — adjust sodium, glycemic load, fiber, iodine, etc. as appropriate${symptomBlock}
   Allergies (avoid completely): ${allergyLabels.join(", ") || "(none)"}
   Preferred cuisines: ${cuisineLabels.join(", ") || "(any)"}
   Pantry — primary ingredients to use: ${ingredients.length ? ingredients.join(", ") : "(no specific pantry — use common ingredients)"}
@@ -168,14 +183,18 @@ RECENT HISTORY (avoid repeating identical dishes from the previous 4 weeks)
 ${historyLines}
 
 GUIDELINES
+- BREAKFAST should be light-to-moderate (≈25-30% of daily kcal), protein-forward, quick to prepare on a weekday. South-Asian users: rotate poha, oats, dalia, idli, dosa, paratha + curd, eggs + toast, smoothie bowls.
+- LUNCH should be the largest meal of the day (≈35-40% of daily kcal). Often the cooking-day batch dish reheated. Include a grain + protein + vegetables.
+- DINNER should be lighter (≈25-30% of daily kcal). Easier on digestion, lower-glycemic carbs. Include a protein + vegetables.
+- SNACKS (when enabled, ≈10-15% of daily kcal): nuts/seeds, fruit + nut butter, yogurt, sprouts chaat, roasted chana, makhana, boiled eggs, smoothies. NEVER ultra-processed packaged snacks.
 - If the diet preferences include both Vegetarian and Non-vegetarian, mix both — leaning toward whatever the user's other selections suggest (e.g. if Halal is also selected, treat non-veg meats as halal).
-- If health conditions include thyroid, diabetes, hypertension, or PCOS, lean toward whole grains, leafy greens, low-glycemic carbs, and adequate protein. Mention this in health_notes.
-- Each meal should be realistically preparable in a home kitchen in under an hour.
+- If health conditions include thyroid, diabetes, hypertension, or PCOS, lean toward whole grains, leafy greens, low-glycemic carbs, and adequate protein. Mention this in health_notes. For HYPOTHYROID: avoid raw cruciferous in large amounts, include selenium (brazil nuts, eggs) + iodine (sea salt, fish), avoid soy with thyroid medication timing.
+- Each meal should be realistically preparable in the time available for that slot — breakfast under 15 min, lunch up to 30 min if dedicated cooking day else <10 min reheat, dinner under 30 min, snacks 0-5 min.
 - Use ingredients from the user's pantry preferentially; supplement with common pantry items only when needed.
 - For youtube_query, write a concrete search query that would surface a credible recipe video. Include the cuisine and dish name. Avoid generic terms.
-- For each ingredient, set "category" to one of: "produce", "protein", "dairy", "grain", "pantry", "spice", "frozen", "other". This is used to group items in the user's grocery list. Examples: tomato/onion/spinach -> produce; chicken/lamb/tofu/eggs/lentils -> protein; milk/yogurt/paneer/cheese/butter -> dairy; rice/pasta/bread/oats -> grain; oil/sauce/flour/sugar -> pantry; cumin/turmeric/garlic powder -> spice; frozen peas/corn -> frozen.
-- For "storage": one short sentence describing how to refrigerate AND/OR freeze the cooked meal to keep it fresh — include container hint and approximate shelf life. Example: "Cool, then refrigerate in airtight container 3-4 days, or freeze flat in zip bags up to 2 months."
-- For "reheat": one short sentence describing the best way to reheat — note microwave vs stovetop vs oven, any added liquid, target temperature, and a serving tip. Example: "Reheat from frozen: thaw overnight, then warm gently on stovetop with a splash of water 5-7 min until steaming. Top with fresh herbs."
+- For each ingredient, set "category" to one of: "produce", "protein", "dairy", "grain", "pantry", "spice", "frozen", "other". This is used to group items in the user's grocery list. Examples: tomato/onion/spinach -> produce; chicken/lamb/tofu/eggs/lentils -> protein; milk/yogurt/paneer/cheese/butter -> dairy; rice/pasta/bread/oats/poha/dalia -> grain; oil/sauce/flour/sugar -> pantry; cumin/turmeric/garlic powder -> spice; frozen peas/corn -> frozen.
+- For "storage": one short sentence describing how to refrigerate AND/OR freeze the cooked meal to keep it fresh — include container hint and approximate shelf life. Example: "Cool, then refrigerate in airtight container 3-4 days, or freeze flat in zip bags up to 2 months." For breakfasts/snacks that are made fresh, write "Best made fresh; not for batch-storage."
+- For "reheat": one short sentence describing the best way to reheat — note microwave vs stovetop vs oven, any added liquid, target temperature, and a serving tip. Example: "Reheat from frozen: thaw overnight, then warm gently on stovetop with a splash of water 5-7 min until steaming. Top with fresh herbs." For fresh items, write "Eat fresh; no reheat needed."
 
 OUTPUT
 Return ONLY valid JSON. No markdown fences, no prose before or after. Schema:
@@ -184,11 +203,12 @@ Return ONLY valid JSON. No markdown fences, no prose before or after. Schema:
   "meals": [
     {
       "day": "${daysToPlan[0] ?? "Mon"}",
+      "slot": "${slotsToPlan[0] ?? "breakfast"}",
       "name": "Specific dish name",
       "cuisine": "Indian | Mediterranean | etc.",
-      "calories": 600,
-      "macros": { "protein_g": 30, "carbs_g": 60, "fat_g": 22, "fiber_g": 8 },
-      "health_notes": "1-2 sentences explaining how this meal fits the user's health/diet profile.",
+      "calories": 450,
+      "macros": { "protein_g": 22, "carbs_g": 55, "fat_g": 14, "fiber_g": 8 },
+      "health_notes": "1-2 sentences explaining how this meal fits the user's health/diet/symptom profile.",
       "ingredients": [
         { "name": "paneer", "qty": "200", "unit": "g", "category": "dairy" }
       ],
@@ -197,7 +217,8 @@ Return ONLY valid JSON. No markdown fences, no prose before or after. Schema:
       "storage": "Refrigerate in airtight container 3-4 days, or freeze flat in zip bags up to 2 months.",
       "reheat": "Thaw overnight in fridge, then warm on stovetop with a splash of water 5-7 min. Garnish with fresh cilantro."
     }
-    // ${mealCount} entries total, day fields in order: ${dayList}
+    // ${mealCount} entries total. Days: ${dayList}. Slots per day: ${slotList}.
+    // Order: iterate days, for each day emit each slot in [${slotList}].
   ]
 }`;
 }
@@ -215,8 +236,11 @@ export function buildSwapPrompt(args: {
   weekEnd: string;
   currentPlan: MealPlan;
   dayToSwap: string;
+  /** Optional: which slot to swap. Defaults to "dinner" for back-compat. */
+  slotToSwap?: "breakfast" | "lunch" | "dinner" | "snack";
   override?: WeekOverride;
 }): string {
+  const slot = args.slotToSwap ?? "dinner";
   const base = buildMealPlannerPrompt({
     config: args.config,
     recentHistory: args.recentHistory,
@@ -225,8 +249,8 @@ export function buildSwapPrompt(args: {
     override: args.override,
   });
   const otherMeals = args.currentPlan.meals
-    .filter((m) => m.day !== args.dayToSwap)
-    .map((m) => `  ${m.day}: ${m.name} (${m.cuisine})`)
+    .filter((m) => !(m.day === args.dayToSwap && (m.slot ?? "dinner") === slot))
+    .map((m) => `  ${m.day} ${m.slot ?? "dinner"}: ${m.name} (${m.cuisine})`)
     .join("\n");
   return `${base}
 
@@ -234,13 +258,14 @@ CURRENT WEEK CONTEXT
 The user already has these meals planned for the same week. Don't repeat any of these names or near-duplicates:
 ${otherMeals}
 
-REPLACE-ONE-DAY INSTRUCTION
-Generate ONE replacement meal for ${args.dayToSwap} only. Different from the dishes above. Same constraints (diet, allergies, cuisines, health notes).
+REPLACE-ONE-MEAL INSTRUCTION
+Generate ONE replacement ${slot} for ${args.dayToSwap} only. Different from the dishes above. Same constraints (diet, allergies, cuisines, symptoms, health notes). Honor the slot-specific guidelines from the GUIDELINES section.
 
 OUTPUT — return ONLY this JSON shape (no array, no fences, no prose):
 {
   "meal": {
     "day": "${args.dayToSwap}",
+    "slot": "${slot}",
     "name": "...",
     "cuisine": "...",
     "calories": 0,
@@ -320,27 +345,32 @@ export function buildRegeneratePrompt(args: {
     weekEnd: args.weekEnd,
     override: args.override,
   });
+  // Locked meals are matched by day (legacy locks) or by `${day}/${slot}` keys
+  // — when slotToSwap is unspecified we treat all of that day's meals as locked.
+  const lockedKeys = new Set(args.lockedDays);
+  const isLocked = (m: { day: string; slot?: string }) =>
+    lockedKeys.has(m.day) || lockedKeys.has(`${m.day}/${m.slot ?? "dinner"}`);
   const lockedMeals = args.currentPlan.meals
-    .filter((m) => args.lockedDays.includes(m.day))
+    .filter(isLocked)
     .map(
       (m) =>
-        `  ${m.day}: ${m.name} (${m.cuisine}) — KEEP THIS EXACTLY, copy through unchanged`,
+        `  ${m.day} ${m.slot ?? "dinner"}: ${m.name} (${m.cuisine}) — KEEP THIS EXACTLY, copy through unchanged`,
     )
     .join("\n");
-  const daysToRegenerate = args.currentPlan.meals
-    .filter((m) => !args.lockedDays.includes(m.day))
-    .map((m) => m.day)
+  const slotsToRegen = args.currentPlan.meals
+    .filter((m) => !isLocked(m))
+    .map((m) => `${m.day}/${m.slot ?? "dinner"}`)
     .join(", ");
 
   return `${base}
 
 REGENERATE-WITH-LOCKS INSTRUCTION
-The user has locked these meals — copy them THROUGH UNCHANGED in your output (same name, same fields):
+The user has locked these meals — copy them THROUGH UNCHANGED in your output (same name, slot, and other fields):
 ${lockedMeals || "  (none)"}
 
-Generate fresh replacements for these days: ${daysToRegenerate || "(none)"}.
+Generate fresh replacements for these (day, slot) entries: ${slotsToRegen || "(none)"}.
 Don't reuse the names of the locked meals or the previous unlocked meals.
 
-Return all 7 meals in the standard schema (with locked meals copied verbatim).`;
+Return ALL meals in the standard schema (locked entries copied verbatim, replacements freshly generated). Each entry MUST include both \`day\` and \`slot\`.`;
 }
 

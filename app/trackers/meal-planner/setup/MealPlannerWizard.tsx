@@ -13,6 +13,7 @@ import {
   DAYS_OF_WEEK,
   DIET_GROUPS,
   HEALTH_OPTIONS,
+  SYMPTOM_OPTIONS,
 } from "@/lib/tracker/meal-planner-defaults";
 import {
   emptyMealPlannerConfig,
@@ -269,6 +270,8 @@ export function MealPlannerWizard({
           activityLevel={config.activityLevel}
           goal={config.goal}
           nutritionistNotes={config.nutritionistNotes ?? ""}
+          symptoms={config.symptoms ?? []}
+          snacksEnabled={config.snacksEnabled ?? false}
           onHeightChange={(v) => update("heightCm", v)}
           onWeightChange={(v) => update("weightKg", v)}
           onAgeChange={(v) => update("age", v)}
@@ -276,6 +279,14 @@ export function MealPlannerWizard({
           onActivityChange={(v) => update("activityLevel", v)}
           onGoalChange={(v) => update("goal", v)}
           onNotesChange={(v) => update("nutritionistNotes", v || undefined)}
+          onSymptomToggle={(id) => {
+            const current = config.symptoms ?? [];
+            const next = current.includes(id)
+              ? current.filter((x) => x !== id)
+              : [...current, id];
+            update("symptoms", next);
+          }}
+          onSnacksToggle={(v) => update("snacksEnabled", v)}
         />
       ) : null}
 
@@ -829,6 +840,8 @@ function BodyGoalsStep({
   activityLevel,
   goal,
   nutritionistNotes,
+  symptoms,
+  snacksEnabled,
   onHeightChange,
   onWeightChange,
   onAgeChange,
@@ -836,6 +849,8 @@ function BodyGoalsStep({
   onActivityChange,
   onGoalChange,
   onNotesChange,
+  onSymptomToggle,
+  onSnacksToggle,
 }: {
   heightCm: number | undefined;
   weightKg: number | undefined;
@@ -844,6 +859,8 @@ function BodyGoalsStep({
   activityLevel: MealPlannerConfig["activityLevel"];
   goal: MealPlannerConfig["goal"];
   nutritionistNotes: string;
+  symptoms: string[];
+  snacksEnabled: boolean;
   onHeightChange: (v: number | undefined) => void;
   onWeightChange: (v: number | undefined) => void;
   onAgeChange: (v: number | undefined) => void;
@@ -851,6 +868,8 @@ function BodyGoalsStep({
   onActivityChange: (v: MealPlannerConfig["activityLevel"]) => void;
   onGoalChange: (v: MealPlannerConfig["goal"]) => void;
   onNotesChange: (v: string) => void;
+  onSymptomToggle: (id: string) => void;
+  onSnacksToggle: (v: boolean) => void;
 }) {
   const showTargets =
     typeof heightCm === "number" &&
@@ -1010,6 +1029,55 @@ function BodyGoalsStep({
       {bmi && targets ? (
         <NutritionSummary bmi={bmi} targets={targets} />
       ) : null}
+
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Symptoms to address (optional)
+        </p>
+        <p className="mb-2 text-[11px] text-slate-400 dark:text-slate-500">
+          Biases meal selection toward foods that support these — e.g. iron-rich
+          for fatigue / hair loss, anti-inflammatory for joint pain.
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {SYMPTOM_OPTIONS.map((s) => {
+            const on = symptoms.includes(s.id);
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onSymptomToggle(s.id)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  on
+                    ? "border-brand-600 bg-brand-600 text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                }`}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            checked={snacksEnabled}
+            onChange={(e) => onSnacksToggle(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-slate-900 dark:text-slate-50">
+              Include snacks in the AI plan
+            </span>
+            <span className="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">
+              When on, the AI generates one snack per day too — typically nuts,
+              seeds, fruit, sprouts, or a smoothie. Off keeps to B/L/D only.
+            </span>
+          </span>
+        </label>
+      </div>
 
       <div>
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">

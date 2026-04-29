@@ -71,6 +71,27 @@ export const HEALTH_OPTIONS: Option[] = [
   { id: "anemia", label: "Anemia" },
 ];
 
+// ─── Symptoms ──────────────────────────────────────────────────────────────
+// Lifestyle / wellness symptoms the user may want to address. Distinct from
+// HEALTH_OPTIONS, which are diagnoses. Symptoms feed the AI prompt so it can
+// bias meal selection (e.g. iron-rich foods for fatigue, anti-inflammatory
+// staples for joint pain). Optional in the wizard.
+
+export const SYMPTOM_OPTIONS: Option[] = [
+  { id: "hair-loss", label: "Hair loss / thinning" },
+  { id: "fatigue", label: "Fatigue / low energy" },
+  { id: "brain-fog", label: "Brain fog" },
+  { id: "irregular-cycle", label: "Irregular cycle" },
+  { id: "cold-sensitivity", label: "Cold sensitivity" },
+  { id: "weight-changes", label: "Unexplained weight changes" },
+  { id: "mood-swings", label: "Mood swings" },
+  { id: "sleep-disturbance", label: "Sleep disturbance" },
+  { id: "acne", label: "Acne / skin breakouts" },
+  { id: "joint-pain", label: "Joint pain / stiffness" },
+  { id: "digestive-issues", label: "Digestive issues / bloating" },
+  { id: "low-libido", label: "Low libido" },
+];
+
 // ─── Allergies ─────────────────────────────────────────────────────────────
 
 export const COMMON_ALLERGIES: Option[] = [
@@ -156,9 +177,21 @@ export const CUISINE_INGREDIENTS: Record<string, string[]> = {
     "lime", "cilantro", "jalapeño", "queso fresco", "cumin",
   ],
   indian: [
-    "basmati rice", "lentils", "chickpeas", "ginger", "garlic", "turmeric",
-    "cumin", "coriander", "garam masala", "ghee", "paneer", "yogurt",
-    "onions", "tomatoes",
+    // Carb staples (South-Asian breakfast/lunch grain rotation)
+    "basmati rice", "atta (whole-wheat flour)", "roti", "oats", "poha",
+    "dalia (broken wheat)", "ragi", "idli batter", "dosa batter", "millets",
+    "rava (semolina)",
+    // Legumes & dals
+    "lentils", "moong dal", "toor dal", "urad dal", "chana dal", "rajma",
+    "chickpeas", "kala chana",
+    // Spices & aromatics
+    "ginger", "garlic", "turmeric", "cumin", "coriander", "garam masala",
+    "mustard seeds", "curry leaves", "asafoetida (hing)", "fenugreek",
+    // Dairy & fats
+    "ghee", "paneer", "yogurt", "buttermilk",
+    // Produce staples
+    "onions", "tomatoes", "spinach", "methi (fenugreek leaves)",
+    "drumstick (moringa)", "okra (bhindi)",
   ],
   chinese: [
     "jasmine rice", "soy sauce", "ginger", "garlic", "sesame oil", "scallions",
