@@ -23,7 +23,12 @@ type ConnectorsPayload = {
     apiKey: string;
     addedAt: string;
   };
-  // telegram, etc. arrive in later commits
+  telegram?: {
+    botToken: string;
+    botUsername: string;
+    chatId?: number;
+    addedAt: string;
+  };
 };
 
 type Step = "idle" | "pick-provider" | "get-key" | "paste-test" | "saving" | "done";

@@ -14,6 +14,12 @@ type ConnectorsPayload = {
   v: 1;
   ai?: { provider: ProviderId; apiKey: string; addedAt: string };
   youtube?: { apiKey: string; addedAt: string };
+  telegram?: {
+    botToken: string;
+    botUsername: string;
+    chatId?: number;
+    addedAt: string;
+  };
 };
 
 type LoadedState =
