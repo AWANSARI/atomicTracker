@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth, signOut } from "@/auth";
 import { findFile, readAtomicTrackerLayout } from "@/lib/google/drive";
 import { bootstrapDriveFolder } from "./actions";
+import { hasMealPlannerConfig } from "@/app/trackers/meal-planner/actions";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -24,6 +25,11 @@ export default async function DashboardPage() {
     );
     hasAiConnector = fileId != null;
   }
+
+  // Tracker: meal-planner config presence
+  const mealPlannerConfigured = isBootstrapped
+    ? await hasMealPlannerConfig().catch(() => false)
+    : false;
 
   return (
     <main className="mx-auto min-h-dvh max-w-md px-6 py-10">
@@ -157,25 +163,61 @@ export default async function DashboardPage() {
         )}
       </section>
 
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+          Trackers
+        </h2>
+        <Link
+          href={
+            mealPlannerConfigured
+              ? "/trackers/meal-planner"
+              : "/trackers"
+          }
+          className="mt-3 flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-300 hover:bg-brand-50"
+        >
+          <div
+            aria-hidden
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-xl"
+          >
+            🍽️
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-900">
+                Weekly Meal Planner
+              </p>
+              {mealPlannerConfigured ? (
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-800">
+                  ✓ Active
+                </span>
+              ) : (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-900">
+                  Set up
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              {mealPlannerConfigured
+                ? "Tap to view config and generate next week"
+                : "8-step wizard: diet, health, allergies, cuisines, ingredients, frequency, mealtimes"}
+            </p>
+          </div>
+        </Link>
+      </section>
+
       <section className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
         <p className="font-medium text-slate-900">What&apos;s next</p>
         <p className="mt-2">
-          Phase 1 is being built in five commits — see{" "}
+          Phase 1 progress —{" "}
           <a
             href="https://github.com/AWANSARI/atomicTracker/blob/main/PLAN.md"
             className="font-medium text-brand-700 underline-offset-2 hover:underline"
           >
             PLAN.md
           </a>
-          . Commit 3 (this one) bootstraps the Drive folder. Set your
-          encryption passphrase in{" "}
-          <Link
-            href="/settings"
-            className="font-medium text-brand-700 underline-offset-2 hover:underline"
-          >
-            Settings
-          </Link>{" "}
-          before commit 4 wires up the AI connector wizard.
+          . Once your tracker is configured, the next commits add plan
+          generation against your AI provider, the review/swap UI, the grocery
+          CSV + Calendar reminders, and the Sunday prep check-in.
         </p>
       </section>
     </main>
