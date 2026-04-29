@@ -172,8 +172,8 @@ export async function POST(req: Request) {
     const shopTime = config.shoppingTime || "10:00";
     const ev = await createEvent(session.accessToken, {
       summary: "AtomicTracker · Grocery shopping",
-      description:
-        "Weekly grocery shopping. Latest list lives in your Drive at /AtomicTracker/grocery/.",
+      description: `Weekly grocery shopping reminder.\n\nThis reminder is generic — each accepted weekly plan generates its own grocery list. Open the meal planner to find the current week's list.\n\n${planUrl}`,
+      source: { title: "AtomicTracker", url: planUrl },
       start: localDateTime(shoppingAnchor, shopTime, timezone),
       end: localDateTime(shoppingAnchor, addMinutes(shopTime, 90), timezone),
       recurrence: [`RRULE:FREQ=WEEKLY;BYDAY=${RRULE_DAY[config.shoppingDay]}`],

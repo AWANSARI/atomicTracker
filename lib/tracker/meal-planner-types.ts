@@ -43,6 +43,24 @@ export type MealPlannerConfig = {
   /** Day of week with no planned meal — eat what you want. null = no cheat day. */
   cheatDay: "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun" | null;
 
+  /**
+   * Body metrics — drives BMI and recommended daily kcal/macro targets via
+   * Mifflin-St Jeor. All optional; if any are missing we skip the targets.
+   */
+  heightCm?: number;
+  weightKg?: number;
+  age?: number;
+  sex?: "male" | "female" | "other";
+
+  /** Activity level for kcal target (Mifflin-St Jeor multiplier). */
+  activityLevel?: "sedentary" | "light" | "moderate" | "active" | "very-active";
+
+  /** Targeted journey for the meal plan. */
+  goal?: "lose" | "maintain" | "gain";
+
+  /** Free-text from a nutritionist (or self) — fed verbatim into the AI prompt. */
+  nutritionistNotes?: string;
+
   /** Mealtime defaults for Sunday prep flow (HH:MM in user's local tz). */
   mealtimes: {
     breakfast: string;

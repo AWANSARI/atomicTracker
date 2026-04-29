@@ -20,6 +20,12 @@ import { readMealPlannerConfig } from "./actions";
 import { AppShell } from "@/components/AppShell";
 import { WeekCard } from "@/components/WeekCard";
 import { RemindersClient } from "./RemindersClient";
+import {
+  canComputeTargets,
+  computeBmi,
+  computeDailyTargets,
+  goalLabel,
+} from "@/lib/tracker/nutrition";
 
 const APP_VERSION = "0.1.0";
 
@@ -148,9 +154,28 @@ export default async function MealPlannerHomePage() {
               label="Mealtimes"
               value={`${config.mealtimes.breakfast} · ${config.mealtimes.lunch} · ${config.mealtimes.dinner}`}
             />
+            {config.heightCm && config.weightKg ? (
+              <Row
+                label="Body"
+                value={`${config.heightCm} cm · ${config.weightKg} kg${config.age ? ` · ${config.age} y` : ""}${config.sex ? ` · ${config.sex}` : ""}`}
+              />
+            ) : null}
+            {config.goal ? (
+              <Row label="Goal" value={goalLabel(config.goal)} />
+            ) : null}
+            {config.nutritionistNotes ? (
+              <Row label="Notes" value={config.nutritionistNotes} />
+            ) : null}
           </dl>
         </details>
       </section>
+
+      {/* Daily nutrition targets — only shown if all metrics are set. Mirrors
+          what a nutritionist would print on a meal plan: BMI, BMR, TDEE,
+          adjusted kcal, and per-macro grams. */}
+      {canComputeTargets(config) ? (
+        <NutritionTargets config={config} />
+      ) : null}
 
       {/* Week cards — the primary action. Each card has its own prep
           check-in link, so we don't repeat one at the page level. */}
@@ -201,6 +226,64 @@ export default async function MealPlannerHomePage() {
 
 function labelOf(options: { id: string; label: string }[], id: string): string {
   return options.find((o) => o.id === id)?.label ?? id;
+}
+
+function NutritionTargets({
+  config,
+}: {
+  config: {
+    heightCm: number;
+    weightKg: number;
+    age: number;
+    sex: "male" | "female" | "other";
+    activityLevel:
+      | "sedentary"
+      | "light"
+      | "moderate"
+      | "active"
+      | "very-active";
+    goal: "lose" | "maintain" | "gain";
+  };
+}) {
+  const bmi = computeBmi(config.heightCm, config.weightKg);
+  const t = computeDailyTargets({
+    heightCm: config.heightCm,
+    weightKg: config.weightKg,
+    age: config.age,
+    sex: config.sex,
+    activityLevel: config.activityLevel,
+    goal: config.goal,
+  });
+  return (
+    <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Daily targets
+        </h2>
+        <span className="text-[11px] text-slate-400 dark:text-slate-500">
+          Mifflin&ndash;St Jeor
+        </span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+        <span className="text-slate-500 dark:text-slate-400">BMI</span>
+        <span className="text-right font-medium text-slate-900 dark:text-slate-100">
+          {bmi.bmi.toFixed(1)} <span className="text-slate-400 dark:text-slate-500">· {bmi.label}</span>
+        </span>
+        <span className="text-slate-500 dark:text-slate-400">Daily kcal</span>
+        <span className="text-right font-medium text-slate-900 dark:text-slate-100">
+          {t.kcal} <span className="text-slate-400 dark:text-slate-500">(BMR {t.bmrKcal} · TDEE {t.tdeeKcal})</span>
+        </span>
+        <span className="text-slate-500 dark:text-slate-400">Macros</span>
+        <span className="text-right font-medium text-slate-900 dark:text-slate-100">
+          P {t.protein_g}g · C {t.carbs_g}g · F {t.fat_g}g
+        </span>
+        <span className="text-slate-500 dark:text-slate-400">Fiber</span>
+        <span className="text-right font-medium text-slate-900 dark:text-slate-100">
+          {t.fiber_g} g
+        </span>
+      </div>
+    </section>
+  );
 }
 
 function Row({ label, value }: { label: string; value: string }) {

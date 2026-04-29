@@ -8,7 +8,7 @@ export default async function MealPlannerSetupPage() {
   return (
     <AppShell
       title={existing ? "Edit configuration" : "Set up Weekly Meal Planner"}
-      subtitle="11 quick steps"
+      subtitle="12 quick steps"
       backHref={existing ? "/trackers/meal-planner" : "/trackers"}
     >
       <MealPlannerWizard initialConfig={existing} />

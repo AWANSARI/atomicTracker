@@ -82,6 +82,20 @@ export type MealPlan = {
   acceptedAt?: string;
   /** Per-day timestamp of last meal modification (after accept). */
   modifiedByDay?: Partial<Record<Day, string>>;
+  /**
+   * Optional week-specific override applied at generation time. Recorded so
+   * the UI can show what differed from the saved config for this week, and
+   * subsequent regenerate calls can re-apply the same override.
+   */
+  weekOverride?: {
+    diets?: string[];
+    cuisines?: string[];
+    customCuisines?: string[];
+    ingredients?: string[];
+    customIngredients?: string[];
+    caloriesPerDay?: number;
+    notes?: string;
+  };
 };
 
 // ─── ISO week helpers ──────────────────────────────────────────────────────

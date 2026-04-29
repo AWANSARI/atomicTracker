@@ -61,6 +61,13 @@ export async function readMealPlannerConfig(): Promise<MealPlannerConfig | null>
       cookingDays: raw.cookingDays ?? defaults.cookingDays,
       shoppingDay: raw.shoppingDay ?? defaults.shoppingDay,
       shoppingTime: raw.shoppingTime ?? defaults.shoppingTime,
+      heightCm: raw.heightCm,
+      weightKg: raw.weightKg,
+      age: raw.age,
+      sex: raw.sex,
+      activityLevel: raw.activityLevel,
+      goal: raw.goal,
+      nutritionistNotes: raw.nutritionistNotes,
       createdAt: raw.createdAt ?? defaults.createdAt,
       updatedAt: raw.updatedAt ?? defaults.updatedAt,
     };

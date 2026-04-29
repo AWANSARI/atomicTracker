@@ -38,6 +38,7 @@ export async function POST(req: Request) {
     youtubeKey?: string;
     weekId?: string;
     overwrite?: boolean;
+    weekOverride?: import("@/lib/tracker/meal-planner-prompt").WeekOverride;
   };
   try {
     body = (await req.json()) as typeof body;
@@ -118,6 +119,7 @@ export async function POST(req: Request) {
     recentHistory,
     weekStart,
     weekEnd: weekEndStr,
+    override: body.weekOverride,
   });
 
   // Call AI
@@ -170,6 +172,7 @@ export async function POST(req: Request) {
     generatedBy: { provider, model: generated.model },
     status: "draft",
     meals,
+    weekOverride: body.weekOverride,
   };
 
   // Save draft to /AtomicTracker/history/meals/{weekId}.draft.json

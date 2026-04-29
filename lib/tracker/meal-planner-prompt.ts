@@ -9,6 +9,45 @@ import {
 } from "./meal-planner-defaults";
 import type { MealPlannerConfig } from "./meal-planner-types";
 import type { MealPlan } from "./meal-planner-plan";
+import {
+  canComputeTargets,
+  computeBmi,
+  computeDailyTargets,
+  goalLabel,
+} from "./nutrition";
+
+/**
+ * Per-week customization that overrides the saved config for THIS generation
+ * only. The user can swap cuisines, ingredients, diets, or add free-text
+ * direction without modifying their saved profile.
+ */
+export type WeekOverride = {
+  diets?: string[];
+  cuisines?: string[];
+  customCuisines?: string[];
+  ingredients?: string[];
+  customIngredients?: string[];
+  /** Override the AI's daily kcal target for THIS week only. */
+  caloriesPerDay?: number;
+  /** Free-text direction: "make this week vegetarian", "lighter dinners", etc. */
+  notes?: string;
+};
+
+/** Apply a week override to a config, returning a new config object. */
+export function applyWeekOverride(
+  config: MealPlannerConfig,
+  override?: WeekOverride,
+): MealPlannerConfig {
+  if (!override) return config;
+  return {
+    ...config,
+    diets: override.diets ?? config.diets,
+    cuisines: override.cuisines ?? config.cuisines,
+    customCuisines: override.customCuisines ?? config.customCuisines,
+    ingredients: override.ingredients ?? config.ingredients,
+    customIngredients: override.customIngredients ?? config.customIngredients,
+  };
+}
 
 /**
  * Build a meal-planner system prompt from the user's config + recent history.
@@ -19,8 +58,12 @@ export function buildMealPlannerPrompt(args: {
   recentHistory: MealPlan[];
   weekStart: string;
   weekEnd: string;
+  /** Optional per-week override (cuisines, ingredients, notes, kcal). */
+  override?: WeekOverride;
 }): string {
-  const { config, recentHistory, weekStart, weekEnd } = args;
+  const baseConfig = args.config;
+  const config = applyWeekOverride(baseConfig, args.override);
+  const { recentHistory, weekStart, weekEnd, override } = args;
 
   const dietLabels = [
     ...config.diets.map((id) => labelOf(ALL_DIETS, id)),
@@ -69,6 +112,46 @@ export function buildMealPlannerPrompt(args: {
       ? config.customCookingFrequency
       : freqInfo?.hint ?? "";
 
+  // Body metrics + computed nutrition targets. We use the BASE config here
+  // (not the override-merged one) so a per-week override of cuisines doesn't
+  // accidentally drop the user's persistent body profile.
+  let bodyBlock = "";
+  let nutritionBlock = "";
+  if (canComputeTargets(baseConfig)) {
+    const bmi = computeBmi(baseConfig.heightCm, baseConfig.weightKg);
+    const t = computeDailyTargets({
+      heightCm: baseConfig.heightCm,
+      weightKg: baseConfig.weightKg,
+      age: baseConfig.age,
+      sex: baseConfig.sex,
+      activityLevel: baseConfig.activityLevel,
+      goal: baseConfig.goal,
+    });
+    const kcalTarget = override?.caloriesPerDay ?? t.kcal;
+    bodyBlock = `\n\nBODY & GOAL
+  Height: ${baseConfig.heightCm} cm · Weight: ${baseConfig.weightKg} kg · Age: ${baseConfig.age} · Sex: ${baseConfig.sex}
+  Activity level: ${baseConfig.activityLevel}
+  BMI: ${bmi.bmi.toFixed(1)} (${bmi.label})
+  Goal: ${goalLabel(baseConfig.goal)}`;
+    nutritionBlock = `\n\nDAILY NUTRITION TARGETS (each day's meal should fit alongside any default breakfast/lunch into roughly these totals — be realistic about a single dinner contributing ~35-45% of daily kcal)
+  Daily kcal: ${kcalTarget} (BMR ${t.bmrKcal} · TDEE ${t.tdeeKcal})
+  Protein: ${t.protein_g} g · Carbs: ${t.carbs_g} g · Fat: ${t.fat_g} g · Fiber: ${t.fiber_g} g`;
+  } else if (override?.caloriesPerDay) {
+    nutritionBlock = `\n\nDAILY NUTRITION TARGET\n  Daily kcal: ${override.caloriesPerDay}`;
+  }
+
+  const nutritionistBlock =
+    baseConfig.nutritionistNotes && baseConfig.nutritionistNotes.trim()
+      ? `\n\nNUTRITIONIST NOTES (verbatim — apply these as hard constraints where reasonable)
+  ${baseConfig.nutritionistNotes.trim().split("\n").join("\n  ")}`
+      : "";
+
+  const overrideBlock =
+    override && (override.notes || override.caloriesPerDay || override.cuisines || override.diets || override.ingredients)
+      ? `\n\nWEEK-SPECIFIC OVERRIDE (this week only — do NOT treat as the user's persistent profile)
+${override.notes ? `  Notes: ${override.notes}` : ""}${override.caloriesPerDay ? `\n  Per-day kcal target: ${override.caloriesPerDay}` : ""}${override.diets ? `\n  Diets (override): ${override.diets.join(", ") || "(any)"}` : ""}${override.cuisines ? `\n  Cuisines (override): ${[...override.cuisines, ...(override.customCuisines ?? [])].join(", ") || "(any)"}` : ""}${override.ingredients ? `\n  Pantry (override): ${[...override.ingredients, ...(override.customIngredients ?? [])].join(", ") || "(use common ingredients)"}` : ""}`
+      : "";
+
   return `You are a thoughtful meal-planning assistant. Generate exactly ${mealCount} dinner meals for the week of ${weekStart} through ${weekEnd}, one per day on these days only: ${dayList}.
 
 ${config.cheatDay ? `IMPORTANT: ${config.cheatDay} is the user's cheat day — do NOT generate a meal for ${config.cheatDay}. The output array should NOT include any entry with day = "${config.cheatDay}".\n` : ""}USER PROFILE
@@ -79,7 +162,7 @@ ${config.cheatDay ? `IMPORTANT: ${config.cheatDay} is the user's cheat day — d
   Pantry — primary ingredients to use: ${ingredients.length ? ingredients.join(", ") : "(no specific pantry — use common ingredients)"}
   Max repeats per dish in this week: ${config.repeatsPerWeek}
   Cooking pattern: ${cookingNote || "Not specified"} — generate dishes that match this pace. Larger batch portions if cooking less frequently.
-  Favorite meals (include if reasonable): ${config.favoriteMeals.length ? config.favoriteMeals.join(", ") : "(none yet)"}
+  Favorite meals (include if reasonable): ${config.favoriteMeals.length ? config.favoriteMeals.join(", ") : "(none yet)"}${bodyBlock}${nutritionBlock}${nutritionistBlock}${overrideBlock}
 
 RECENT HISTORY (avoid repeating identical dishes from the previous 4 weeks)
 ${historyLines}
@@ -132,12 +215,14 @@ export function buildSwapPrompt(args: {
   weekEnd: string;
   currentPlan: MealPlan;
   dayToSwap: string;
+  override?: WeekOverride;
 }): string {
   const base = buildMealPlannerPrompt({
     config: args.config,
     recentHistory: args.recentHistory,
     weekStart: args.weekStart,
     weekEnd: args.weekEnd,
+    override: args.override,
   });
   const otherMeals = args.currentPlan.meals
     .filter((m) => m.day !== args.dayToSwap)
@@ -226,12 +311,14 @@ export function buildRegeneratePrompt(args: {
   weekEnd: string;
   currentPlan: MealPlan;
   lockedDays: string[];
+  override?: WeekOverride;
 }): string {
   const base = buildMealPlannerPrompt({
     config: args.config,
     recentHistory: args.recentHistory,
     weekStart: args.weekStart,
     weekEnd: args.weekEnd,
+    override: args.override,
   });
   const lockedMeals = args.currentPlan.meals
     .filter((m) => args.lockedDays.includes(m.day))

@@ -18,8 +18,26 @@ import {
   emptyMealPlannerConfig,
   type MealPlannerConfig,
 } from "@/lib/tracker/meal-planner-types";
+import {
+  computeBmi,
+  computeDailyTargets,
+  type BmiResult,
+  type DailyTargets,
+} from "@/lib/tracker/nutrition";
 
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+type Step =
+  | 0
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11;
 const STEP_LABELS = [
   "Diet",
   "Health",
@@ -31,9 +49,10 @@ const STEP_LABELS = [
   "Cheat day",
   "Schedule",
   "Times",
+  "Body & goals",
   "Review",
 ];
-const LAST_STEP: Step = 10;
+const LAST_STEP: Step = 11;
 
 export function MealPlannerWizard({
   initialConfig,
@@ -242,6 +261,25 @@ export function MealPlannerWizard({
       ) : null}
 
       {step === 10 ? (
+        <BodyGoalsStep
+          heightCm={config.heightCm}
+          weightKg={config.weightKg}
+          age={config.age}
+          sex={config.sex}
+          activityLevel={config.activityLevel}
+          goal={config.goal}
+          nutritionistNotes={config.nutritionistNotes ?? ""}
+          onHeightChange={(v) => update("heightCm", v)}
+          onWeightChange={(v) => update("weightKg", v)}
+          onAgeChange={(v) => update("age", v)}
+          onSexChange={(v) => update("sex", v)}
+          onActivityChange={(v) => update("activityLevel", v)}
+          onGoalChange={(v) => update("goal", v)}
+          onNotesChange={(v) => update("nutritionistNotes", v || undefined)}
+        />
+      ) : null}
+
+      {step === 11 ? (
         <ReviewStep config={config} suggested={suggestedIngredients.length} />
       ) : null}
 
@@ -783,6 +821,293 @@ function MealtimesStep({
   );
 }
 
+function BodyGoalsStep({
+  heightCm,
+  weightKg,
+  age,
+  sex,
+  activityLevel,
+  goal,
+  nutritionistNotes,
+  onHeightChange,
+  onWeightChange,
+  onAgeChange,
+  onSexChange,
+  onActivityChange,
+  onGoalChange,
+  onNotesChange,
+}: {
+  heightCm: number | undefined;
+  weightKg: number | undefined;
+  age: number | undefined;
+  sex: MealPlannerConfig["sex"];
+  activityLevel: MealPlannerConfig["activityLevel"];
+  goal: MealPlannerConfig["goal"];
+  nutritionistNotes: string;
+  onHeightChange: (v: number | undefined) => void;
+  onWeightChange: (v: number | undefined) => void;
+  onAgeChange: (v: number | undefined) => void;
+  onSexChange: (v: MealPlannerConfig["sex"]) => void;
+  onActivityChange: (v: MealPlannerConfig["activityLevel"]) => void;
+  onGoalChange: (v: MealPlannerConfig["goal"]) => void;
+  onNotesChange: (v: string) => void;
+}) {
+  const showTargets =
+    typeof heightCm === "number" &&
+    heightCm > 0 &&
+    typeof weightKg === "number" &&
+    weightKg > 0 &&
+    typeof age === "number" &&
+    age > 0 &&
+    sex &&
+    activityLevel &&
+    goal;
+  const bmi = showTargets ? computeBmi(heightCm, weightKg) : null;
+  const targets =
+    showTargets && sex && activityLevel && goal
+      ? computeDailyTargets({
+          heightCm,
+          weightKg,
+          age,
+          sex,
+          activityLevel,
+          goal,
+        })
+      : null;
+
+  const SEXES: { id: NonNullable<MealPlannerConfig["sex"]>; label: string }[] = [
+    { id: "male", label: "Male" },
+    { id: "female", label: "Female" },
+    { id: "other", label: "Other" },
+  ];
+  const GOALS: { id: NonNullable<MealPlannerConfig["goal"]>; label: string; hint: string }[] = [
+    { id: "lose", label: "Weight loss", hint: "Calorie deficit, protein-forward." },
+    { id: "maintain", label: "Maintain", hint: "Match energy expenditure." },
+    { id: "gain", label: "Bulking / gain", hint: "Lean surplus, higher carbs." },
+  ];
+  const ACTIVITIES: { id: NonNullable<MealPlannerConfig["activityLevel"]>; label: string }[] = [
+    { id: "sedentary", label: "Sedentary" },
+    { id: "light", label: "Light" },
+    { id: "moderate", label: "Moderate" },
+    { id: "active", label: "Active" },
+    { id: "very-active", label: "Very active" },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <Heading
+        title="Body & goals"
+        hint="Drives BMI and daily kcal/macro targets via Mifflin-St Jeor. All optional — leave blank to skip."
+      />
+
+      <div className="grid grid-cols-2 gap-3">
+        <NumberRow
+          label="Height (cm)"
+          value={heightCm}
+          onChange={onHeightChange}
+          min={80}
+          max={250}
+          placeholder="170"
+        />
+        <NumberRow
+          label="Weight (kg)"
+          value={weightKg}
+          onChange={onWeightChange}
+          min={30}
+          max={300}
+          step={0.1}
+          placeholder="68"
+        />
+        <NumberRow
+          label="Age"
+          value={age}
+          onChange={onAgeChange}
+          min={12}
+          max={120}
+          placeholder="30"
+        />
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Sex
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {SEXES.map((s) => {
+              const on = sex === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => onSexChange(s.id)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                    on
+                      ? "border-brand-600 bg-brand-600 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Activity level
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {ACTIVITIES.map((a) => {
+            const on = activityLevel === a.id;
+            return (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => onActivityChange(a.id)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  on
+                    ? "border-brand-600 bg-brand-600 text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                }`}
+              >
+                {a.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Goal
+        </p>
+        <div className="space-y-2">
+          {GOALS.map((g) => {
+            const on = goal === g.id;
+            return (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => onGoalChange(g.id)}
+                className={`block w-full rounded-xl border p-3 text-left transition ${
+                  on
+                    ? "border-brand-600 bg-brand-600 text-white shadow-sm"
+                    : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+                }`}
+              >
+                <p className={`text-sm font-semibold ${on ? "text-white" : "text-slate-900 dark:text-slate-50"}`}>
+                  {g.label}
+                </p>
+                <p className={`mt-0.5 text-xs ${on ? "text-white/80" : "text-slate-500 dark:text-slate-400"}`}>
+                  {g.hint}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {bmi && targets ? (
+        <NutritionSummary bmi={bmi} targets={targets} />
+      ) : null}
+
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Nutritionist notes
+        </p>
+        <textarea
+          value={nutritionistNotes}
+          onChange={(e) => onNotesChange(e.target.value)}
+          rows={4}
+          placeholder="Paste advice from your nutritionist (e.g. &lsquo;keep sodium under 1500mg&rsquo;, &lsquo;rotate iron-rich greens&rsquo;). Fed verbatim into the AI."
+          className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+        />
+      </div>
+    </div>
+  );
+}
+
+function NumberRow({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  step,
+  placeholder,
+}: {
+  label: string;
+  value: number | undefined;
+  onChange: (v: number | undefined) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        {label}
+      </p>
+      <input
+        type="number"
+        inputMode="decimal"
+        min={min}
+        max={max}
+        step={step ?? 1}
+        value={typeof value === "number" ? value : ""}
+        placeholder={placeholder}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === "") {
+            onChange(undefined);
+            return;
+          }
+          const n = Number(v);
+          onChange(Number.isFinite(n) ? n : undefined);
+        }}
+        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+      />
+    </div>
+  );
+}
+
+function NutritionSummary({
+  bmi,
+  targets,
+}: {
+  bmi: BmiResult;
+  targets: DailyTargets;
+}) {
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
+        Computed targets
+      </p>
+      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-emerald-900 dark:text-emerald-200">
+        <span>BMI</span>
+        <span className="text-right font-semibold">
+          {bmi.bmi.toFixed(1)} · {bmi.label}
+        </span>
+        <span>BMR</span>
+        <span className="text-right font-semibold">{targets.bmrKcal} kcal</span>
+        <span>TDEE</span>
+        <span className="text-right font-semibold">{targets.tdeeKcal} kcal</span>
+        <span>Daily kcal</span>
+        <span className="text-right font-semibold">{targets.kcal} kcal</span>
+        <span>Protein</span>
+        <span className="text-right font-semibold">{targets.protein_g} g</span>
+        <span>Carbs</span>
+        <span className="text-right font-semibold">{targets.carbs_g} g</span>
+        <span>Fat</span>
+        <span className="text-right font-semibold">{targets.fat_g} g</span>
+        <span>Fiber</span>
+        <span className="text-right font-semibold">{targets.fiber_g} g</span>
+      </div>
+    </div>
+  );
+}
+
 function freqLabel(id: MealPlannerConfig["cookingFrequency"]): string {
   return COOKING_FREQUENCIES.find((f) => f.id === id)?.label ?? id;
 }
@@ -852,6 +1177,25 @@ function ReviewStep({
         label="Default B/L"
         value={`${config.defaultBreakfast || "—"} / ${config.defaultLunch || "—"}`}
       />
+      <ReviewRow
+        label="Body"
+        value={
+          config.heightCm && config.weightKg
+            ? `${config.heightCm} cm · ${config.weightKg} kg${config.age ? ` · ${config.age} y` : ""}${config.sex ? ` · ${config.sex}` : ""}`
+            : "—"
+        }
+      />
+      <ReviewRow
+        label="Goal"
+        value={
+          config.goal
+            ? `${config.goal === "lose" ? "Weight loss" : config.goal === "gain" ? "Bulking / gain" : "Maintain"}${config.activityLevel ? ` · ${config.activityLevel}` : ""}`
+            : "—"
+        }
+      />
+      {config.nutritionistNotes ? (
+        <ReviewRow label="Notes" value={config.nutritionistNotes} />
+      ) : null}
       <p className="mt-4 text-[11px] text-slate-400 dark:text-slate-500">
         Saves to /AtomicTracker/config/tracker.meal-planner.json on your Drive.
         Plain JSON — not encrypted (preferences, not secrets).
