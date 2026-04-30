@@ -26,6 +26,7 @@ type ConnectorsPayload = {
 type LoadedState =
   | { kind: "loading" }
   | { kind: "no-passphrase" }
+  | { kind: "load-error"; passphrase: string; message: string }
   | { kind: "ready"; passphrase: string; payload: ConnectorsPayload };
 
 type FormState =
@@ -52,8 +53,9 @@ export function TelegramSection({ googleSub }: { googleSub: string }) {
   useEffect(() => {
     let cancelled = false;
     async function reload() {
+      let passphrase: string | null = null;
       try {
-        const passphrase = await loadPassphrase();
+        passphrase = await loadPassphrase();
         if (cancelled) return;
         if (!passphrase) {
           setLoaded({ kind: "no-passphrase" });
@@ -68,8 +70,12 @@ export function TelegramSection({ googleSub }: { googleSub: string }) {
         setLoaded({ kind: "ready", passphrase, payload });
       } catch (e) {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : String(e));
-        setLoaded({ kind: "no-passphrase" });
+        const message = e instanceof Error ? e.message : String(e);
+        if (passphrase) {
+          setLoaded({ kind: "load-error", passphrase, message });
+        } else {
+          setLoaded({ kind: "no-passphrase" });
+        }
       }
     }
     void reload();
@@ -215,6 +221,59 @@ export function TelegramSection({ googleSub }: { googleSub: string }) {
     }
   }
 
+  async function onSetupWebhook() {
+    if (loaded.kind !== "ready" || !loaded.payload.telegram?.chatId) return;
+    const tg = loaded.payload.telegram;
+    setError(null);
+    setInfo(null);
+    try {
+      const res = await fetch("/api/telegram/setup-webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          botToken: tg.botToken,
+          chatId: tg.chatId,
+          action: "install",
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!data.ok) {
+        setError(data.error || "Webhook install failed");
+      } else {
+        setInfo(
+          "Chat commands enabled. Send /help to your bot to see what it can do.",
+        );
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function onRemoveWebhook() {
+    if (loaded.kind !== "ready" || !loaded.payload.telegram) return;
+    const tg = loaded.payload.telegram;
+    setError(null);
+    setInfo(null);
+    try {
+      const res = await fetch("/api/telegram/setup-webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          botToken: tg.botToken,
+          action: "remove",
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!data.ok) {
+        setError(data.error || "Webhook remove failed");
+      } else {
+        setInfo("Chat commands removed. Bot will stop responding to messages.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   async function onSendTest() {
     if (loaded.kind !== "ready" || !loaded.payload.telegram?.chatId) return;
     const tg = loaded.payload.telegram;
@@ -271,6 +330,20 @@ export function TelegramSection({ googleSub }: { googleSub: string }) {
       <p className="text-sm text-slate-500 dark:text-slate-400">
         Set your passphrase first.
       </p>
+    );
+  }
+  if (loaded.kind === "load-error") {
+    const looksLikeDecrypt =
+      /decrypt|aes|gcm|integrity|operation/i.test(loaded.message);
+    return (
+      <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+        <p className="font-medium">Couldn&apos;t load saved bot connection.</p>
+        <p className="mt-1 text-xs">
+          {looksLikeDecrypt
+            ? "Passphrase mismatch — the one in this browser doesn't decrypt your saved envelope. Use 'Forget passphrase' above and re-enter the original."
+            : `Read failed: ${loaded.message}.`}
+        </p>
+      </div>
     );
   }
 
@@ -490,6 +563,20 @@ export function TelegramSection({ googleSub }: { googleSub: string }) {
           >
             <RefreshCcw className="h-3.5 w-3.5" aria-hidden />
             Re-pair
+          </button>
+          <button
+            type="button"
+            onClick={onSetupWebhook}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            Enable chat commands
+          </button>
+          <button
+            type="button"
+            onClick={onRemoveWebhook}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            Disable chat commands
           </button>
         </div>
       )}

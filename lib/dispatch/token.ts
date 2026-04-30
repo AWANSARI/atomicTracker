@@ -43,6 +43,14 @@ export type DispatchPayload = {
   drive: string;
   /** Issued-at, seconds since epoch. Informational only — no expiry enforcement. */
   iat: number;
+  /**
+   * Optional. When this token is used as a Telegram bot webhook URL (see
+   * /api/telegram/webhook/[token]) we embed the bot token + paired chat id
+   * so the webhook can read Drive AND reply via Telegram without holding
+   * passphrase-decrypted state on the server.
+   */
+  bt?: string;
+  chat?: number;
 };
 
 function getSecret(): string {
@@ -82,6 +90,11 @@ export function signDispatchToken(payload: DispatchPayload): string {
   if (payload.v !== 1) throw new Error("signDispatchToken: only v=1 supported");
   if (!payload.sub || !payload.rt || !payload.drive) {
     throw new Error("signDispatchToken: payload is missing required fields");
+  }
+  // bt + chat are optional but if one is present so should the other (Telegram
+  // webhooks need both to function). Don't fail hard, just normalize.
+  if ((payload.bt && !payload.chat) || (payload.chat && !payload.bt)) {
+    throw new Error("signDispatchToken: bt and chat must be set together");
   }
   const salt = nodeRandomBytes(SALT_BYTES);
   const iv = nodeRandomBytes(IV_BYTES);

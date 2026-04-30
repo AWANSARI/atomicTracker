@@ -35,6 +35,7 @@ type Step = "idle" | "pick-provider" | "get-key" | "paste-test" | "saving" | "do
 
 type LoadedState =
   | { kind: "no-passphrase" }
+  | { kind: "load-error"; passphrase: string; message: string }
   | { kind: "no-connectors"; passphrase: string }
   | { kind: "has-ai"; passphrase: string; payload: ConnectorsPayload };
 
@@ -52,8 +53,9 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
   useEffect(() => {
     let cancelled = false;
     async function reload() {
+      let passphrase: string | null = null;
       try {
-        const passphrase = await loadPassphrase();
+        passphrase = await loadPassphrase();
         if (cancelled) return;
         if (!passphrase) {
           setLoaded({ kind: "no-passphrase" });
@@ -70,8 +72,15 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
         setLoaded({ kind: "has-ai", passphrase, payload });
       } catch (e) {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : String(e));
-        setLoaded({ kind: "no-passphrase" });
+        const message = e instanceof Error ? e.message : String(e);
+        // Distinguish: only show "no-passphrase" when the passphrase is
+        // genuinely missing. If we got the passphrase and a later step
+        // failed (decrypt error, Drive read error), surface that explicitly.
+        if (passphrase) {
+          setLoaded({ kind: "load-error", passphrase, message });
+        } else {
+          setLoaded({ kind: "no-passphrase" });
+        }
       }
     }
     void reload();
@@ -171,6 +180,21 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
       <p className="text-sm text-slate-500 dark:text-slate-400">
         Set your encryption passphrase above first.
       </p>
+    );
+  }
+
+  if (loaded.kind === "load-error") {
+    const looksLikeDecrypt =
+      /decrypt|aes|gcm|integrity|operation/i.test(loaded.message);
+    return (
+      <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+        <p className="font-medium">Couldn&apos;t load saved connectors.</p>
+        <p className="mt-1 text-xs">
+          {looksLikeDecrypt
+            ? "The passphrase in this browser doesn't match the one used to encrypt your saved keys. Tap 'Forget passphrase on this browser' above and re-enter the original passphrase, or remove your saved connectors via Drive."
+            : `Read failed: ${loaded.message}. Try refreshing the page.`}
+        </p>
+      </div>
     );
   }
 
