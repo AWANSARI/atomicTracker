@@ -348,7 +348,7 @@ cycleMarker: menstrual | follicular | ovulatory | luteal | spotting
 v: 1
 ai?: { provider, apiKey, addedAt }
 youtube?: { apiKey, addedAt }
-telegram? (planned, not yet)
+telegram?: { botToken, botUsername, chatId?, addedAt }   ← see lib/telegram/api.ts
 ```
 
 ## Conventions — DO NOT BREAK
@@ -423,6 +423,18 @@ The repo has a long log; only the high-signal recent commits are listed. Run `gi
 | 64a0311 | feat(phase4-5): Daily Timeline + Analytics & Insights |
 | 5e96a0a | feat(phase6): adherence-aware AI prompt + cycle-based nutrition + print CSS |
 | d485f29 | feat(phase7): registry-driven Trackers picker |
+| 28855df | yearly archive auto-trigger + Settings UI + favorite meals first-class |
+| 74c464a | replace brand-square 'A' with curved wordmark logo |
+| d1fc9ae | feat(dispatch): token + refresh helpers, expose getCurrentRefreshToken |
+| 148126c | feat(dispatch): /api/dispatch/setup + /api/dispatch/[token] |
+| 5dec3f3 | feat(dispatch): Settings → Claude Code Routine section |
+| 18c4617 | feat(dispatch): smoke-dispatch-token.mjs |
+| daca82a | feat(telegram): bot API wrapper + signed pair tokens |
+| b5ab7f3 | feat(telegram): API routes for test/pair-start/pair-confirm/notify |
+| 6a7d3c8 | feat(telegram): Settings section + extend ConnectorsPayload |
+| 178a2af | Merge PR #1: feat/telegram-bot-connector |
+| fafb4cd | Merge PR #2: feat/claude-routine-dispatch |
+| 0f69d37 | fix: gated Settings sections re-check passphrase on change |
 
 ## Pending / TODO
 
@@ -432,9 +444,8 @@ These are unfinished pieces. Most of the original Phase-2 backlog was shipped in
 - **Stale recurring reminders from older accepts.** Existing users have admin events on Calendar from before commit `6f188e8` moved them out. The new `/api/setup-reminders` won't see those (their IDs aren't in the new `reminderEventIds`). Users have to manually delete the dupes once. A one-time info notice is shown on the meal planner home when `reminderEventIds` is not yet configured.
 
 ### External-integration features (each needs its own setup flow + auth)
-- **Telegram bot** — paste BotFather token in Settings, mirror chat in Telegram, accept/swap from chat commands. Plan in PLAN.md §6 Phase 2.
-- **OpenClaw setup wizard** — recurring tasks via user's local OpenClaw gateway; multi-platform messaging bridge (WhatsApp/Discord/Slack/Signal). Plan in PLAN.md §8.4.
-- **Claude Code Routine setup wizard** — alternative for paid Claude users. PLAN.md §8.2.
+- **OpenClaw setup wizard** — recurring tasks via user's local OpenClaw gateway; multi-platform messaging bridge (WhatsApp/Discord/Slack/Signal). Plan in PLAN.md §8.4. **Not started.**
+- **Telegram chat-driven actions** — bot is paired (commits `daca82a`..`6a7d3c8`) and `/api/telegram/notify` works. Next: bot webhook that listens for `/plan`, `/swap`, `/accept` commands and routes to existing API routes. **Connector done; chat command surface pending.**
 
 ### Phase-3 ordering integrations
 - **Walmart Open API** + **Amazon PA-API** for product disambiguation (vs the current search-URL-only fallback).
@@ -460,6 +471,10 @@ These are unfinished pieces. Most of the original Phase-2 backlog was shipped in
 - ✅ Granular ingredient editing on plan review (PlanClient `addIngredient` / `removeIngredient`)
 - ✅ Favorite meals as first-class — heart toggle on meal cards + Favorites manager on the meal-planner home
 - ✅ Per-request `cache()` memoization for `auth()`, `readAtomicTrackerLayout`, `ensureAtomicTrackerLayout`, `readMealPlannerConfig`, etc.
+- ✅ **Telegram bot connector** — signed pair tokens, BotFather token in Settings (encrypted), `/api/telegram/{test,pair-start,pair-confirm,notify}`. Notifications can be sent now; bot command surface still TODO.
+- ✅ **Claude Code Routine dispatch** — `/api/dispatch/setup` mints a token, `/api/dispatch/[token]` runs the planning flow when the user's Routine fires. `lib/dispatch/{token,refresh}.ts` for HMAC tokens + refresh-token caching. Settings RoutineSection guides setup.
+- ✅ **Custom wordmark logo** (replaced the brand "A" square on landing).
+- ✅ **Settings sections react to passphrase changes** — `subscribePassphrase` + `PASSPHRASE_CHANGED_EVENT` so YouTube / connector / data sections re-check on set/clear without reload.
 
 ## Working with this repo
 
