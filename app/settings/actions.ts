@@ -38,6 +38,24 @@ async function getConfigFolderId(token: string, sub: string): Promise<string> {
 
 // ─── Server actions ─────────────────────────────────────────────────────────
 
+/**
+ * Delete connectors.enc.json entirely. Escape hatch when the user's
+ * passphrase no longer decrypts the saved envelope (which can happen if they
+ * cleared and re-typed a different passphrase). After this, the next save
+ * starts a fresh envelope.
+ */
+export async function resetConnectorEnvelope(): Promise<{ ok: true; deleted: boolean }> {
+  const { accessToken, googleSub } = await requireAuth();
+  const configId = await getConfigFolderId(accessToken, googleSub);
+  const fileId = await findFile(accessToken, CONNECTORS_FILE, configId);
+  if (!fileId) return { ok: true, deleted: false };
+  const { deleteFile } = await import("@/lib/google/drive");
+  await deleteFile(accessToken, fileId);
+  revalidatePath("/dashboard");
+  revalidatePath("/settings");
+  return { ok: true, deleted: true };
+}
+
 /** Return whether connectors.enc.json exists (no decryption). */
 export async function hasConnectors(): Promise<boolean> {
   const { accessToken, googleSub } = await requireAuth();

@@ -105,7 +105,23 @@ export async function decryptJson<T = unknown>(
   const iv = base64ToBytes(envelope.iv);
   const ct = base64ToBytes(envelope.ct);
   const key = await deriveKey(passphrase, googleSub, salt);
-  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+  let pt: ArrayBuffer;
+  try {
+    pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+  } catch (e) {
+    // WebCrypto throws DOMException("OperationError") with an empty .message
+    // on AES-GCM auth-tag mismatch, which is the dominant failure mode here:
+    // the passphrase in this browser doesn't match the one used to encrypt
+    // the envelope. Re-throw with a meaningful message so callers don't
+    // surface a blank "Read failed: ." to the user.
+    const name = (e as { name?: string } | null)?.name ?? "";
+    if (name === "OperationError" || (e instanceof Error && !e.message)) {
+      throw new Error(
+        "decrypt-failed: passphrase doesn't match the saved envelope",
+      );
+    }
+    throw e;
+  }
   return JSON.parse(new TextDecoder().decode(pt)) as T;
 }
 

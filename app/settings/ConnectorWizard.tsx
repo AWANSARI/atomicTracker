@@ -7,6 +7,7 @@ import { loadPassphrase, subscribePassphrase } from "@/lib/storage/passphrase";
 import { PROVIDERS, type ProviderId } from "@/lib/ai/providers";
 import {
   readConnectorEnvelope,
+  resetConnectorEnvelope,
   saveConnectorEnvelope,
   testKeyAction,
 } from "./actions";
@@ -184,16 +185,34 @@ export function ConnectorWizard({ googleSub }: { googleSub: string }) {
   }
 
   if (loaded.kind === "load-error") {
-    const looksLikeDecrypt =
+    const isDecrypt =
+      loaded.message.startsWith("decrypt-failed:") ||
       /decrypt|aes|gcm|integrity|operation/i.test(loaded.message);
     return (
-      <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-        <p className="font-medium">Couldn&apos;t load saved connectors.</p>
-        <p className="mt-1 text-xs">
-          {looksLikeDecrypt
-            ? "The passphrase in this browser doesn't match the one used to encrypt your saved keys. Tap 'Forget passphrase on this browser' above and re-enter the original passphrase, or remove your saved connectors via Drive."
-            : `Read failed: ${loaded.message}. Try refreshing the page.`}
+      <div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+        <p className="font-medium">
+          {isDecrypt
+            ? "Passphrase doesn't match your saved keys."
+            : "Couldn't load saved connectors."}
         </p>
+        <p className="text-xs">
+          {isDecrypt
+            ? "The passphrase in this browser is different from the one used to encrypt your saved keys. Either tap 'Forget passphrase on this browser' above and re-enter the original — or, if you don't remember it, reset and start fresh below."
+            : `Read failed: ${loaded.message || "(no message)"}. Try refreshing the page.`}
+        </p>
+        {isDecrypt ? (
+          <button
+            type="button"
+            onClick={async () => {
+              if (!confirm("Delete saved AI / YouTube / Telegram keys from your Drive? You'll need to re-enter them.")) return;
+              await resetConnectorEnvelope();
+              window.location.reload();
+            }}
+            className="rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/60"
+          >
+            Reset saved connectors
+          </button>
+        ) : null}
       </div>
     );
   }

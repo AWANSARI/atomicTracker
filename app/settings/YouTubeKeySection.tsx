@@ -6,6 +6,7 @@ import { loadPassphrase, subscribePassphrase } from "@/lib/storage/passphrase";
 import type { ProviderId } from "@/lib/ai/providers";
 import {
   readConnectorEnvelope,
+  resetConnectorEnvelope,
   saveConnectorEnvelope,
   testYouTubeKeyAction,
 } from "./actions";
@@ -147,16 +148,34 @@ export function YouTubeKeySection({ googleSub }: { googleSub: string }) {
   }
 
   if (loaded.kind === "load-error") {
-    const looksLikeDecrypt =
+    const isDecrypt =
+      loaded.message.startsWith("decrypt-failed:") ||
       /decrypt|aes|gcm|integrity|operation/i.test(loaded.message);
     return (
-      <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-        <p className="font-medium">Couldn&apos;t load saved keys.</p>
-        <p className="mt-1 text-xs">
-          {looksLikeDecrypt
-            ? "Passphrase mismatch — the one in this browser doesn't decrypt your saved envelope. Use 'Forget passphrase' above and re-enter the original."
-            : `Read failed: ${loaded.message}.`}
+      <div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+        <p className="font-medium">
+          {isDecrypt
+            ? "Passphrase doesn't match your saved keys."
+            : "Couldn't load saved keys."}
         </p>
+        <p className="text-xs">
+          {isDecrypt
+            ? "The passphrase in this browser is different from the one used to encrypt your saved keys. Either re-enter the original passphrase above, or reset to start fresh."
+            : `Read failed: ${loaded.message || "(no message)"}.`}
+        </p>
+        {isDecrypt ? (
+          <button
+            type="button"
+            onClick={async () => {
+              if (!confirm("Delete saved keys from your Drive? You'll need to re-enter them.")) return;
+              await resetConnectorEnvelope();
+              window.location.reload();
+            }}
+            className="rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/60"
+          >
+            Reset saved connectors
+          </button>
+        ) : null}
       </div>
     );
   }
